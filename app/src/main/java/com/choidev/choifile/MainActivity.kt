@@ -58,6 +58,8 @@ import com.choidev.choifile.util.FileKind
 import com.choidev.choifile.util.OpenChoice
 import com.choidev.choifile.util.extensionKey
 import com.choidev.choifile.util.hasAllFilesAccess
+import com.choidev.choifile.util.installApk
+import com.choidev.choifile.util.isApk
 import com.choidev.choifile.util.kindOf
 import com.choidev.choifile.util.launchWith
 import com.choidev.choifile.util.openWithOtherApp
@@ -132,6 +134,8 @@ class MainActivity : FragmentActivity() {
         val openFile: (FileItem) -> Unit = { item ->
             if (ArchiveLocation.isArchive(item.path) || RemoteLocation.isRemote(item.path)) {
                 viewModel.openVirtualFile(item)
+            } else if (isApk(File(item.path))) {
+                installApk(context, File(item.path))
             } else {
                 val builtIn = hasBuiltIn(item.name)
                 when (val choice = viewModel.associationFor(item.name)) {

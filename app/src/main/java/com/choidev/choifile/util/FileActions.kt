@@ -87,6 +87,33 @@ fun launchWith(context: Context, file: File, packageName: String, activity: Stri
     }
 }
 
+fun isApk(file: File): Boolean = file.extensionLower() == "apk"
+
+/**
+ * Hands an APK to the system package installer. The installer refuses files from an app that may not install
+ * packages, so the user is first sent to "install unknown apps" for choifile; false means that screen was shown
+ * and the user should tap the file again after allowing it.
+ */
+fun installApk(context: Context, file: File): Boolean {
+    if (Build.VERSION.SDK_INT >= 26 && !context.packageManager.canRequestPackageInstalls()) {
+        val settings = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        Toast.makeText(context, R.string.msg_allow_install, Toast.LENGTH_LONG).show()
+        context.startActivity(settings)
+        return false
+    }
+    val intent = Intent(Intent.ACTION_VIEW)
+        .setDataAndType(uriOf(context, file), "application/vnd.android.package-archive")
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+    return try {
+        context.startActivity(intent)
+        true
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(context, R.string.msg_no_app, Toast.LENGTH_SHORT).show()
+        false
+    }
+}
+
 fun shareFiles(context: Context, files: List<File>) {
     val uris = ArrayList(files.map { uriOf(context, it) })
     val send = if (uris.size == 1) {

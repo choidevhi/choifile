@@ -11,8 +11,8 @@ android {
         applicationId = "com.choidev.choifile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.4.1"
+        versionCode = 6
+        versionName = "0.4.2"
     }
     // Release key comes from ~/.gradle/gradle.properties (never committed).
     val releaseStore = providers.gradleProperty("CHOIDEV_RELEASE_STORE_FILE").orNull
