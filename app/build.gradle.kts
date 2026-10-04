@@ -14,6 +14,24 @@ android {
         versionCode = 4
         versionName = "0.4.0"
     }
+    // Release key comes from ~/.gradle/gradle.properties (never committed).
+    val releaseStore = providers.gradleProperty("CHOIDEV_RELEASE_STORE_FILE").orNull
+    signingConfigs {
+        if (releaseStore != null) {
+            create("release") {
+                storeFile = file(releaseStore)
+                storePassword = providers.gradleProperty("CHOIDEV_RELEASE_STORE_PASSWORD").get()
+                keyAlias = providers.gradleProperty("CHOIDEV_RELEASE_KEY_ALIAS").get()
+                keyPassword = providers.gradleProperty("CHOIDEV_RELEASE_KEY_PASSWORD").get()
+            }
+        }
+    }
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            if (releaseStore != null) signingConfig = signingConfigs.getByName("release")
+        }
+    }
     packaging {
         resources {
             excludes += setOf(
