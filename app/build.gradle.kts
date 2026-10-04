@@ -11,8 +11,8 @@ android {
         applicationId = "com.choidev.choifile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.4.0"
+        versionCode = 5
+        versionName = "0.4.1"
     }
     // Release key comes from ~/.gradle/gradle.properties (never committed).
     val releaseStore = providers.gradleProperty("CHOIDEV_RELEASE_STORE_FILE").orNull
@@ -58,6 +58,7 @@ dependencies {
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.fragment:fragment-ktx:1.8.9")
     implementation("io.coil-kt.coil3:coil-compose:3.3.0")
+    implementation("io.coil-kt.coil3:coil-video:3.3.0")
     implementation("androidx.media3:media3-exoplayer:1.8.0")
     implementation("androidx.media3:media3-ui:1.8.0")
 

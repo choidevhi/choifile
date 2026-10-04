@@ -35,7 +35,7 @@ object ArchiveWriter {
                 ArchiveFormat.ZIP -> ZipArchiveOutputStream(out).use { z ->
                     z.setEncoding("UTF-8")
                     for ((f, name) in items) {
-                        check(!cancelled()) { "cancelled" }
+                        if (cancelled()) throw ArchiveCancelledException()
                         z.putArchiveEntry(ZipArchiveEntry(f, if (f.isDirectory) "$name/" else name))
                         if (f.isFile) { bytes += copyTo(f, z::write, cancelled); onProgress(name, bytes) }
                         z.closeArchiveEntry()
@@ -43,7 +43,7 @@ object ArchiveWriter {
                 }
                 ArchiveFormat.SEVEN_Z -> SevenZOutputFile(out).use { s ->
                     for ((f, name) in items) {
-                        check(!cancelled()) { "cancelled" }
+                        if (cancelled()) throw ArchiveCancelledException()
                         s.putArchiveEntry(s.createArchiveEntry(f, name))
                         if (f.isFile) { bytes += copyTo(f, s::write, cancelled); onProgress(name, bytes) }
                         s.closeArchiveEntry()
@@ -53,7 +53,7 @@ object ArchiveWriter {
                     t.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX)
                     t.setBigNumberMode(TarArchiveOutputStream.BIGNUMBER_POSIX)
                     for ((f, name) in items) {
-                        check(!cancelled()) { "cancelled" }
+                        if (cancelled()) throw ArchiveCancelledException()
                         t.putArchiveEntry(TarArchiveEntry(f, if (f.isDirectory) "$name/" else name))
                         if (f.isFile) { bytes += copyTo(f, t::write, cancelled); onProgress(name, bytes) }
                         t.closeArchiveEntry()
@@ -73,7 +73,7 @@ object ArchiveWriter {
             while (true) {
                 val r = input.read(buf)
                 if (r < 0) break
-                check(!cancelled()) { "cancelled" }
+                if (cancelled()) throw ArchiveCancelledException()
                 write(buf, 0, r)
                 n += r
             }

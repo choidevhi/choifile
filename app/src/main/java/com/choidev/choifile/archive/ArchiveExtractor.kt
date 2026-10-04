@@ -73,4 +73,45 @@ object ArchiveExtractor {
         }
         return files
     }
+
+    /**
+     * "여기에 풀기" / "다른 위치에 풀기": extracts into [parent] itself, never overwriting anything there. The archive
+     * is first extracted into a scratch folder inside [parent] (same volume, so the final step is a rename), then each
+     * top-level item (or each selected entry when [select] is given) is moved up under a name from [uniqueChild].
+     * A failure or cancel leaves [parent] exactly as it was. Returns the items now in [parent].
+     */
+    fun extractMerged(
+        archive: File,
+        format: ArchiveFormat,
+        parent: File,
+        uniqueChild: (dir: File, name: String) -> File,
+        select: Set<String>? = null,
+        limits: ArchiveLimits = ArchiveLimits(),
+        cancelled: () -> Boolean = { false },
+        onProgress: (name: String, totalBytes: Long) -> Unit = { _, _ -> },
+    ): List<File> {
+        val scratch = File(parent, SCRATCH_PREFIX + System.nanoTime())
+        try {
+            extract(archive, format, scratch, select, limits, cancelled, onProgress)
+            if (cancelled()) throw ArchiveCancelledException()
+            val tops = if (select == null) scratch.listFiles().orEmpty().sortedBy { it.name }
+            else select.map(::normalizeEntryName).filter { it.isNotEmpty() }.sortedBy { it.length }.map { File(scratch, it) }
+            val moved = ArrayList<File>()
+            for (src in tops) {
+                if (!src.exists()) continue // a selected entry that was inside another selected folder
+                val dst = uniqueChild(parent, src.name)
+                if (!src.renameTo(dst)) {
+                    check(src.copyRecursively(dst)) { "could not move ${src.name}" }
+                    src.deleteRecursively()
+                }
+                moved += dst
+            }
+            return moved
+        } finally {
+            scratch.deleteRecursively()
+        }
+    }
+
+    /** Scratch folders of [extractMerged]; a leftover one (process killed midway) is safe to delete. */
+    const val SCRATCH_PREFIX = ".choifile_extract_"
 }

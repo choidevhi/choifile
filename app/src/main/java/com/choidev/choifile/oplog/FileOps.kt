@@ -64,6 +64,16 @@ class FileOps(private val store: FileStore, val log: OperationLog, private val c
         addRecord(OpType.EXTRACT, origin, 1, 0, archive.name, listOf(OpItem(archive.absolutePath, dest.absolutePath, created = files, createdDirs = dirs)), UndoState.AVAILABLE, null)
     }
 
+    /** Records items an extraction placed directly into an existing folder (each one newly created there). */
+    fun recordExtractMerged(archive: File, items: List<File>, origin: String = ORIGIN_MANUAL) {
+        val made = items.filter { it.exists() }.map { top ->
+            val (files, dirs) = describeCreated(top)
+            OpItem(archive.absolutePath, top.absolutePath, created = files, createdDirs = dirs)
+        }
+        if (made.isEmpty()) return
+        addRecord(OpType.EXTRACT, origin, made.size, 0, archive.name, made, UndoState.AVAILABLE, null)
+    }
+
     fun recordArchive(out: File, origin: String = ORIGIN_MANUAL) {
         if (!out.isFile) return
         val (files, dirs) = describeCreated(out)

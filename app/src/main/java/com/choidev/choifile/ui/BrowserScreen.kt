@@ -7,7 +7,40 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.Unarchive
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import coil3.video.videoFramePercent
+import com.choidev.choifile.browser.CellBounds
+import com.choidev.choifile.browser.DragSelection
+import com.choidev.choifile.browser.ExtractMode
+import com.choidev.choifile.security.APP_PRIVATE_FOLDERS
+import com.choidev.choifile.security.isSameOrInside
+import com.choidev.choifile.storage.Favorite
+import com.choidev.choifile.storage.FavoritesStore
+import com.choidev.choifile.util.VideoDurations
+import com.choidev.choifile.util.formatDuration
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -152,6 +185,8 @@ private sealed interface DialogState {
     data class Compress(val paths: List<String>) : DialogState
     data object RemoteDelete : DialogState
     data class Properties(val path: String) : DialogState
+    /** "다른 위치에 풀기": pick the folder first. [entries] non-null = entries of the open archive tab. */
+    data class ExtractTo(val archives: List<String>, val entries: List<String>?, val inArchiveTab: Boolean, val start: String) : DialogState
 }
 
 /** A location the comic viewer can open: a local folder, a local zip/cbz, or a folder inside a zip tab. */
@@ -182,12 +217,19 @@ fun BrowserScreen(
     val trash by vm.trash.collectAsStateWithLifecycle()
     val lockedRoot by vm.lockedRoot.collectAsStateWithLifecycle()
     val protectedPaths by vm.protectedPaths.collectAsStateWithLifecycle()
+    val favorites by vm.favorites.collectAsStateWithLifecycle()
+    val missingFavorites by vm.missingFavorites.collectAsStateWithLifecycle()
     val requestAuth = rememberRequestAuth()
     val context = LocalContext.current
     val density = LocalDensity.current
     val snackbar = remember { SnackbarHostState() }
     var dialog by remember { mutableStateOf<DialogState?>(null) }
     val c = ChoiTheme.colors
+    val scope = rememberCoroutineScope()
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    var dragSelecting by remember { mutableStateOf(false) }
+    val drawerBlocked by rememberUpdatedState(dragSelecting || drawerState.isOpen)
+    LaunchedEffect(drawerState.isOpen) { if (drawerState.isOpen) vm.refreshFavorites() }
 
     val layer = rememberGraphicsLayer()
     val backdrop = remember(layer) { GlassBackdrop(layer) }
@@ -209,6 +251,24 @@ fun BrowserScreen(
     BackHandler(enabled = state.selection.isNotEmpty() || !atRoot) {
         if (state.selection.isNotEmpty()) vm.clearSelection() else vm.up()
     }
+    // Registered after the one above, so with the drawer open "back" closes the drawer first.
+    BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
+
+    val onTool: (DrawerTool) -> Unit = { tool ->
+        scope.launch { drawerState.close() }
+        when (tool) {
+            DrawerTool.HIDDEN -> onOpenVault()
+            DrawerTool.TRASH -> dialog = DialogState.Trash
+            DrawerTool.CONNECTIONS -> onOpenConnections()
+            DrawerTool.SEARCH -> onOpenSearch()
+            DrawerTool.ANALYSIS -> onOpenTool(ToolScreen.ANALYSIS)
+            DrawerTool.DUPLICATES -> onOpenTool(ToolScreen.DUPLICATES)
+            DrawerTool.RULES -> onOpenTool(ToolScreen.RULES)
+            DrawerTool.OPERATIONS -> onOpenTool(ToolScreen.OPERATIONS)
+            DrawerTool.SERVER -> onOpenTool(ToolScreen.SERVER)
+            DrawerTool.SETTINGS -> onOpenSettings()
+        }
+    }
 
     val bottomBarVisible = state.selection.isNotEmpty() || state.clipboard != null
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -227,7 +287,41 @@ fun BrowserScreen(
         snapshotFlow { pager.settledPage }.collect { page -> if (page != currentIndex && page in 0 until vm.state.value.tabs.size) vm.selectTab(page) }
     }
 
-    Box(Modifier.fillMaxSize().background(c.background)) {
+    ModalNavigationDrawer(
+        drawerContent = {
+            ModalDrawerSheet(
+                Modifier.width(300.dp),
+                drawerShape = RoundedCornerShape(topEnd = Radius.xl, bottomEnd = Radius.xl),
+                drawerContainerColor = c.background,
+                drawerContentColor = c.foreground,
+                drawerTonalElevation = 0.dp,
+                windowInsets = WindowInsets(0),
+            ) {
+                BrowserDrawerContent(
+                    favorites = favorites,
+                    missing = missingFavorites,
+                    storage = vm.storageShortcuts,
+                    currentPath = state.tab.path,
+                    onOpenFolder = { path -> scope.launch { drawerState.close() }; vm.openDir(path) },
+                    onRemoveFavorite = vm::removeFavorite,
+                    onRenameFavorite = vm::renameFavorite,
+                    onMoveFavorite = vm::moveFavorite,
+                    onTool = onTool,
+                )
+            }
+        },
+        drawerState = drawerState,
+        // Closed, the drawer opens only from the menu button or a swipe from the very edge (below), so swiping the
+        // list sideways keeps switching tabs. Open, it can be swiped shut.
+        gesturesEnabled = drawerState.isOpen,
+        scrimColor = c.scrim,
+    ) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(c.background)
+            .edgeSwipeToOpen(20.dp, blocked = { drawerBlocked }) { scope.launch { drawerState.open() } },
+    ) {
         Box(
             Modifier
                 .fillMaxSize()
@@ -241,7 +335,7 @@ fun BrowserScreen(
                 pager,
                 Modifier.fillMaxSize(),
                 key = { state.tabs.getOrNull(it)?.id ?: -it },
-                userScrollEnabled = state.selection.isEmpty() && state.tabs.size > 1,
+                userScrollEnabled = state.selection.isEmpty() && state.tabs.size > 1 && !dragSelecting,
             ) { page ->
                 val tab = state.tabs.getOrNull(page) ?: return@HorizontalPager
                 val isCurrent = page == state.current
@@ -257,6 +351,7 @@ fun BrowserScreen(
                     vm = vm,
                     onOpenFile = onOpenFile,
                     onUnlock = { root -> requestAuth(R.string.auth_subtitle_folder, false) { vm.unlock(root) } },
+                    onDragSelecting = { dragSelecting = it },
                 )
             }
         }
@@ -264,7 +359,7 @@ fun BrowserScreen(
         GlassSurface(backdrop, Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { topPx = it.height }, GlassEdge.TOP) {
             Column(Modifier.statusBarsPadding()) {
                 if (state.selection.isEmpty()) {
-                    NavRow(state, atRoot, vm, onOpenVault, onOpenSettings, onOpenSearch, onOpenConnections, onOpenTool, onOpenComic) { dialog = it }
+                    NavRow(state, atRoot, vm, favorites, onMenu = { scope.launch { drawerState.open() } }, onOpenComic = onOpenComic) { dialog = it }
                 } else {
                     SelectionRow(state, vm)
                 }
@@ -280,6 +375,8 @@ fun BrowserScreen(
                         SelectionActions(
                             state, entries, vm, Modifier.weight(1f),
                             onDialog = { dialog = it }, protectedPaths = protectedPaths,
+                            favorites = favorites,
+                            noMedia = listing?.takeIf { it.path == state.tab.path }?.noMedia.orEmpty(),
                             onShare = { files ->
                                 if (files.isEmpty()) {
                                     snackbar.currentSnackbarData?.dismiss()
@@ -316,6 +413,7 @@ fun BrowserScreen(
             snackbar,
             Modifier.align(Alignment.BottomCenter).padding(bottom = if (bottomBarVisible) with(density) { bottomPx.toDp() } else navInset),
         )
+    }
     }
 
     when (val d = dialog) {
@@ -370,6 +468,16 @@ fun BrowserScreen(
         )
         is DialogState.Properties -> PropertiesDialog(d.path) { dialog = null }
         is DialogState.Rename -> NameDialog(stringResource(R.string.rename), d.name, { vm.rename(d.path, it); dialog = null }, { dialog = null })
+        is DialogState.ExtractTo -> FolderPickerDialog(
+            rootPath = vm.rootPath,
+            start = d.start,
+            onPick = { target ->
+                dialog = null
+                if (d.inArchiveTab) vm.extractFromCurrentArchive(d.entries, ExtractMode.ELSEWHERE, target)
+                else vm.extractArchives(d.archives, ExtractMode.ELSEWHERE, target)
+            },
+            onDismiss = { dialog = null },
+        )
     }
 }
 
@@ -390,6 +498,7 @@ private fun TabPage(
     vm: BrowserViewModel,
     onOpenFile: (FileItem) -> Unit,
     onUnlock: (String) -> Unit,
+    onDragSelecting: (Boolean) -> Unit,
 ) {
     var peeked by remember(tab.path) { mutableStateOf<Listing?>(null) }
     LaunchedEffect(tab.path, isCurrent, state.sort, state.ascending, state.showHidden) {
@@ -416,7 +525,7 @@ private fun TabPage(
                 )
             }
         }
-        else -> key(tab.path, tab.grid) { FileList(data.items, tab, state, padding, protectedPaths, vm, onOpenFile, interactive = isCurrent) }
+        else -> key(tab.path, tab.grid) { FileList(data.items, data.noMedia, tab, state, padding, protectedPaths, vm, onOpenFile, interactive = isCurrent, onDragSelecting) }
     }
 }
 
@@ -424,6 +533,7 @@ private fun TabPage(
 @Composable
 private fun FileList(
     entries: List<FileItem>,
+    noMedia: Set<String>,
     tab: Tab,
     state: BrowserState,
     padding: PaddingValues,
@@ -431,11 +541,16 @@ private fun FileList(
     vm: BrowserViewModel,
     onOpenFile: (FileItem) -> Unit,
     interactive: Boolean,
+    onDragSelecting: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
     val dateFormat = remember { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT) }
     val c = ChoiTheme.colors
     val selection = if (interactive) state.selection else emptySet()
+    // Thumbnails of a protected folder or the app's private folders are never written to a disk cache.
+    val privateFolder = remember(tab.path, protectedPaths) {
+        protectedPaths.any { isSameOrInside(tab.path, it) } || tab.path.replace('\\', '/').split('/').any { it in APP_PRIVATE_FOLDERS }
+    }
 
     // Restore where this folder was left (also across restarts); re-anchor by name if items moved.
     val start = remember {
@@ -469,9 +584,102 @@ private fun FileList(
     // The icon/thumbnail is its own target: it starts (or extends) multi-select instead of opening.
     fun iconClick(item: FileItem) { if (interactive) vm.toggleSelect(item.path) }
 
+    // ---- long-press and drag to select a range (list and grid) ----
+    val haptic = LocalHapticFeedback.current
+    val currentKeys by rememberUpdatedState(entries.map { it.path })
+    val currentSelection by rememberUpdatedState(selection)
+    var drag by remember { mutableStateOf<DragSelection?>(null) }
+    var pointer by remember { mutableStateOf<Offset?>(null) }
+    var viewportPx by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
+    val topInsetPx = with(density) { padding.calculateTopPadding().toPx() }
+    val bottomInsetPx = with(density) { padding.calculateBottomPadding().toPx() }
+
+    fun cells(): List<CellBounds> = if (tab.grid) {
+        val info = gridState.layoutInfo
+        info.visibleItemsInfo.map {
+            val top = (it.offset.y - info.viewportStartOffset).toFloat()
+            CellBounds(it.index, it.offset.x.toFloat(), top, (it.offset.x + it.size.width).toFloat(), top + it.size.height)
+        }
+    } else {
+        val info = listState.layoutInfo
+        info.visibleItemsInfo.map {
+            val top = (it.offset - info.viewportStartOffset).toFloat()
+            CellBounds(it.index, 0f, top, Float.MAX_VALUE, top + it.size)
+        }
+    }
+
+    fun dragTo(p: Offset) {
+        val d = drag ?: return
+        val index = DragSelection.indexAt(cells(), p.x, p.y) ?: return
+        vm.setSelection(d.selectionAt(index))
+    }
+
+    // Auto-scroll while the finger rests near the top or bottom edge of the visible list.
+    LaunchedEffect(drag != null) {
+        if (drag == null) return@LaunchedEffect
+        val zone = with(density) { 72.dp.toPx() }
+        val maxStep = with(density) { 18.dp.toPx() }
+        while (true) {
+            withFrameNanos { }
+            val p = pointer ?: continue
+            val step = DragSelection.autoScrollStep(p.y, topInsetPx, viewportPx - bottomInsetPx, zone, maxStep)
+            if (step != 0f) {
+                if (tab.grid) gridState.scrollBy(step) else listState.scrollBy(step)
+                dragTo(p)
+            }
+        }
+    }
+
+    val dragSelect = if (!interactive) Modifier else Modifier
+        .onSizeChanged { viewportPx = it.height }
+        .pointerInput(tab.grid) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                // Wait for a long press; a release, a move (scroll, tab swipe) or a second finger cancels it.
+                val notLong = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                    var done = false
+                    while (!done) {
+                        val e = awaitPointerEvent(PointerEventPass.Initial)
+                        val ch = e.changes.firstOrNull { it.id == down.id }
+                        if (ch == null || !ch.pressed || ch.isConsumed || e.changes.size > 1 ||
+                            (ch.position - down.position).getDistance() > viewConfiguration.touchSlop
+                        ) done = true
+                    }
+                    true
+                }
+                if (notLong != null) return@awaitEachGesture
+                val keys = currentKeys
+                val anchor = DragSelection.indexAt(cells(), down.position.x, down.position.y)
+                    ?.takeIf { it in keys.indices } ?: return@awaitEachGesture
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                val d = DragSelection(keys, currentSelection, anchor)
+                drag = d
+                pointer = down.position
+                onDragSelecting(true)
+                vm.setSelection(d.selectionAt(anchor))
+                try {
+                    // From here on the gesture is ours: the row does not see a click, the list does not scroll
+                    // and the pager does not switch tabs.
+                    while (true) {
+                        val e = awaitPointerEvent(PointerEventPass.Initial)
+                        val ch = e.changes.firstOrNull { it.id == down.id }
+                        e.changes.forEach { it.consume() }
+                        if (ch == null || !ch.pressed) break
+                        pointer = ch.position
+                        dragTo(ch.position)
+                    }
+                } finally {
+                    drag = null
+                    pointer = null
+                    onDragSelecting(false)
+                }
+            }
+        }
+
     if (tab.grid) {
         LazyVerticalGrid(
-            GridCells.Adaptive(108.dp), Modifier.fillMaxSize(), state = gridState,
+            GridCells.Adaptive(108.dp), Modifier.fillMaxSize().then(dragSelect), state = gridState,
             contentPadding = PaddingValues(start = Space.sm, end = Space.sm, top = padding.calculateTopPadding() + Space.xs, bottom = padding.calculateBottomPadding()),
         ) {
             items(entries, key = { it.path }) { item ->
@@ -482,12 +690,13 @@ private fun FileList(
                         .clip(RoundedCornerShape(Radius.lg))
                         .background(if (selected) c.selection else c.background)
                         .border(Hairline, if (selected) c.ring else Color.Transparent, RoundedCornerShape(Radius.lg))
-                        .combinedClickable(onClick = { click(item) }, onLongClick = { iconClick(item) })
+                        .clickable { click(item) }
                         .padding(Space.sm),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(Radius.lg)).clickable { iconClick(item) }) {
-                        FileThumb(item, Modifier.fillMaxSize(), large = true)
+                        FileThumb(item, Modifier.fillMaxSize(), large = true, privateFolder = privateFolder)
+                        if (item.path in noMedia) NoMediaBadge(Modifier.align(Alignment.TopStart).padding(Space.xs))
                         if (selected) SelectedBadge(Modifier.align(Alignment.TopEnd).padding(Space.xs))
                     }
                     Spacer(Modifier.height(Space.sm))
@@ -496,19 +705,19 @@ private fun FileList(
             }
         }
     } else {
-        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = padding) {
+        LazyColumn(Modifier.fillMaxSize().then(dragSelect), state = listState, contentPadding = padding) {
             items(entries, key = { it.path }) { item ->
                 val selected = item.path in selection
                 Row(
                     Modifier
                         .fillMaxWidth()
                         .background(if (selected) c.selection else c.background)
-                        .combinedClickable(onClick = { click(item) }, onLongClick = { iconClick(item) })
+                        .clickable { click(item) }
                         .padding(horizontal = Space.lg, vertical = Space.sm),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(Modifier.size(44.dp).clip(RoundedCornerShape(Radius.lg)).clickable { iconClick(item) }) {
-                        FileThumb(item, Modifier.fillMaxSize(), large = false)
+                        FileThumb(item, Modifier.fillMaxSize(), large = false, privateFolder = privateFolder)
                         if (selected) {
                             Box(Modifier.fillMaxSize().background(c.primary.copy(alpha = 0.85f)), contentAlignment = Alignment.Center) {
                                 Icon(Icons.Default.Check, null, Modifier.size(IconSize.md), tint = c.primaryForeground)
@@ -519,10 +728,18 @@ private fun FileList(
                     Column(Modifier.weight(1f)) {
                         Text(item.name, maxLines = 1, overflow = TextOverflow.MiddleEllipsis, style = MaterialTheme.typography.bodyLarge)
                         val date = dateFormat.format(Date(item.modified))
+                        val duration = rememberVideoDuration(item)
                         Text(
-                            if (item.isDirectory) date else Formatter.formatShortFileSize(context, item.size) + "  ·  " + date,
+                            when {
+                                item.isDirectory -> date
+                                duration != null -> Formatter.formatShortFileSize(context, item.size) + "  ·  " + formatDuration(duration) + "  ·  " + date
+                                else -> Formatter.formatShortFileSize(context, item.size) + "  ·  " + date
+                            },
                             style = MaterialTheme.typography.bodySmall, color = c.mutedForeground, maxLines = 1,
                         )
+                    }
+                    if (item.path in noMedia) {
+                        Icon(Icons.Default.VisibilityOff, stringResource(R.string.nomedia_badge), Modifier.padding(start = Space.sm).size(IconSize.sm), tint = c.mutedForeground)
                     }
                     if (item.path in protectedPaths) {
                         Icon(Icons.Default.Lock, stringResource(R.string.protect_folder), Modifier.padding(start = Space.sm).size(IconSize.sm), tint = c.mutedForeground)
@@ -541,13 +758,64 @@ private fun SelectedBadge(modifier: Modifier) {
     }
 }
 
-/** Icon tile (muted square with a 1px border) or an image thumbnail. */
+/** Marks a folder that contains .nomedia (hidden from galleries). */
 @Composable
-private fun FileThumb(item: FileItem, modifier: Modifier, large: Boolean) {
+private fun NoMediaBadge(modifier: Modifier) {
     val c = ChoiTheme.colors
+    Box(modifier.size(22.dp).background(c.background, CircleShape).border(Hairline, c.border, CircleShape), contentAlignment = Alignment.Center) {
+        Icon(Icons.Default.VisibilityOff, stringResource(R.string.nomedia_badge), Modifier.size(IconSize.xs), tint = c.mutedForeground)
+    }
+}
+
+/** Duration of a local video (null for anything else, or until it is known). Read off the main thread, cached in memory. */
+@Composable
+private fun rememberVideoDuration(item: FileItem): Long? {
+    val video = !item.isDirectory && kindOfPath(item.path) == LocationKind.LOCAL && kindOf(File(item.name)) == FileKind.VIDEO
+    if (!video) return null
+    val d by produceState(VideoDurations.cached(item.path, item.modified), item.path, item.modified) {
+        if (value == null) value = VideoDurations.of(item.path, item.modified)
+    }
+    return d
+}
+
+/**
+ * Icon tile (muted square with a 1px border), or for local images and videos a thumbnail decoded at the cell's
+ * size (Coil; a video shows one frame plus a play mark and its duration). Leaving the screen cancels the decode.
+ */
+@Composable
+private fun FileThumb(item: FileItem, modifier: Modifier, large: Boolean, privateFolder: Boolean) {
+    val c = ChoiTheme.colors
+    val context = LocalContext.current
     val kind = if (item.isDirectory) null else kindOf(File(item.path))
-    if (kind == FileKind.IMAGE && kindOfPath(item.path) == LocationKind.LOCAL) {
-        AsyncImage(File(item.path), null, modifier.background(c.muted), contentScale = ContentScale.Crop)
+    if ((kind == FileKind.IMAGE || kind == FileKind.VIDEO) && kindOfPath(item.path) == LocationKind.LOCAL) {
+        val request = remember(item.path, item.modified, privateFolder) {
+            ImageRequest.Builder(context)
+                .data(File(item.path))
+                .apply {
+                    if (privateFolder) diskCachePolicy(CachePolicy.DISABLED)
+                    if (kind == FileKind.VIDEO) videoFramePercent(0.1)
+                }
+                .build()
+        }
+        Box(modifier.background(c.muted)) {
+            AsyncImage(request, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            if (kind == FileKind.VIDEO) {
+                val scrim = Color.Black.copy(alpha = 0.55f)
+                Box(
+                    Modifier.align(Alignment.Center).size(if (large) 30.dp else 20.dp).background(scrim, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Default.PlayArrow, null, Modifier.size(if (large) IconSize.md else IconSize.xs), tint = Color.White) }
+                if (large) {
+                    rememberVideoDuration(item)?.let { ms ->
+                        Text(
+                            formatDuration(ms),
+                            Modifier.align(Alignment.BottomEnd).padding(Space.xs).background(scrim, RoundedCornerShape(Radius.sm)).padding(horizontal = Space.xs),
+                            style = MaterialTheme.typography.labelSmall, color = Color.White,
+                        )
+                    }
+                }
+            }
+        }
     } else {
         val icon: ImageVector = when (kind) {
             null -> Icons.Default.Folder
@@ -570,25 +838,23 @@ private fun NavRow(
     state: BrowserState,
     atRoot: Boolean,
     vm: BrowserViewModel,
-    onOpenVault: () -> Unit,
-    onOpenSettings: () -> Unit,
-    onOpenSearch: () -> Unit,
-    onOpenConnections: () -> Unit,
-    onOpenTool: (ToolScreen) -> Unit,
+    favorites: List<Favorite>,
+    onMenu: () -> Unit,
     onOpenComic: (String) -> Unit,
     onDialog: (DialogState) -> Unit,
 ) {
-    val kind = kindOfPath(state.tab.path)
+    val path = state.tab.path
+    val kind = kindOfPath(path)
     val c = ChoiTheme.colors
     var sortMenu by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = Space.xs), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onMenu) { Icon(Icons.Default.Menu, stringResource(R.string.drawer_open), Modifier.size(IconSize.md)) }
         IconButton(vm::up, enabled = !atRoot) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.up), Modifier.size(IconSize.md)) }
-        Column(Modifier.weight(1f).padding(start = Space.xs)) {
-            Text(vm.tabLabel(state.tab.path), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
-            Text(vm.displayPath(state.tab.path), maxLines = 1, overflow = TextOverflow.StartEllipsis, style = MaterialTheme.typography.bodySmall, color = c.mutedForeground)
+        Column(Modifier.weight(1f).padding(start = Space.xxs)) {
+            Text(vm.tabLabel(path), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
+            Text(vm.displayPath(path), maxLines = 1, overflow = TextOverflow.StartEllipsis, style = MaterialTheme.typography.bodySmall, color = c.mutedForeground)
         }
-        IconButton(onOpenSearch) { Icon(Icons.Default.Search, stringResource(R.string.search), Modifier.size(IconSize.md)) }
         IconButton(vm::toggleGrid) {
             Icon(if (state.tab.grid) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView, stringResource(if (state.tab.grid) R.string.view_list else R.string.view_grid), Modifier.size(IconSize.md))
         }
@@ -612,30 +878,49 @@ private fun NavRow(
         }
         Box {
             IconButton({ moreMenu = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.more), Modifier.size(IconSize.md)) }
+            // Short on purpose: things to do with this folder. Places and tools live in the drawer.
             ChoiMenu(moreMenu, { moreMenu = false }) {
                 @Composable fun item(label: Int, action: () -> Unit) = DropdownMenuItem({ Text(stringResource(label)) }, { moreMenu = false; action() })
-                item(R.string.new_folder) { onDialog(DialogState.NewFolder) }
-                item(R.string.new_text_file) { onDialog(DialogState.NewFile) }
-                if (kind == LocationKind.LOCAL) item(R.string.new_dummy_file) { onDialog(DialogState.NewDummy) }
-                if (kind == LocationKind.ARCHIVE) item(R.string.extract_all) { vm.extractFromCurrentArchive(null) }
-                if (comicCapable(state.tab.path, isDirectory = true)) item(R.string.comic_open_here) { onOpenComic(state.tab.path) }
+                val local = kind == LocationKind.LOCAL
+                val hasNoMedia = remember(moreMenu, path) { local && vm.hasNoMedia(path) }
+                if (kind != LocationKind.ARCHIVE) {
+                    item(R.string.new_folder) { onDialog(DialogState.NewFolder) }
+                    item(R.string.new_text_file) { onDialog(DialogState.NewFile) }
+                }
+                if (local) {
+                    item(R.string.new_dummy_file) { onDialog(DialogState.NewDummy) }
+                    if (!hasNoMedia) item(R.string.nomedia_new) { vm.toggleNoMedia(listOf(path), on = true) }
+                }
+                if (kind == LocationKind.ARCHIVE) {
+                    // The whole archive; to take only some entries, select them and use 추출 in the bottom bar.
+                    item(R.string.extract_mode_here) { vm.extractFromCurrentArchive(null, ExtractMode.HERE) }
+                    item(R.string.extract_mode_folder) { vm.extractFromCurrentArchive(null, ExtractMode.FOLDER) }
+                    item(R.string.extract_mode_elsewhere) {
+                        onDialog(DialogState.ExtractTo(emptyList(), null, true, File(ArchiveLocation.archiveOf(path)).parent ?: vm.rootPath))
+                    }
+                }
+                if (comicCapable(path, isDirectory = true)) item(R.string.comic_open_here) { onOpenComic(path) }
                 HorizontalDivider(thickness = Hairline, color = c.border)
+                if (vm.canFavorite(path)) {
+                    val starred = favorites.any { it.path == FavoritesStore.normalize(path) }
+                    DropdownMenuItem(
+                        text = { Text(stringResource(if (starred) R.string.fav_remove else R.string.fav_add)) },
+                        leadingIcon = { Icon(if (starred) Icons.Default.Star else Icons.Default.StarBorder, null, Modifier.size(IconSize.md)) },
+                        onClick = { moreMenu = false; vm.toggleFavorite(path) },
+                    )
+                }
+                if (local) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(if (hasNoMedia) R.string.nomedia_off else R.string.nomedia_on)) },
+                        leadingIcon = { Icon(Icons.Default.VisibilityOff, null, Modifier.size(IconSize.md)) },
+                        onClick = { moreMenu = false; vm.toggleNoMedia(listOf(path), on = !hasNoMedia) },
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.show_hidden)) },
                     leadingIcon = { Checkbox(state.showHidden, null) },
                     onClick = { vm.toggleHidden(); moreMenu = false },
                 )
-                item(R.string.trash) { onDialog(DialogState.Trash) }
-                item(R.string.hidden_items) { onOpenVault() }
-                item(R.string.connections) { onOpenConnections() }
-                HorizontalDivider(thickness = Hairline, color = c.border)
-                item(R.string.ops_title) { onOpenTool(ToolScreen.OPERATIONS) }
-                item(R.string.analysis_title) { onOpenTool(ToolScreen.ANALYSIS) }
-                item(R.string.dup_title) { onOpenTool(ToolScreen.DUPLICATES) }
-                item(R.string.rules_title) { onOpenTool(ToolScreen.RULES) }
-                item(R.string.srv_title) { onOpenTool(ToolScreen.SERVER) }
-                HorizontalDivider(thickness = Hairline, color = c.border)
-                item(R.string.settings) { onOpenSettings() }
             }
         }
     }
@@ -703,12 +988,16 @@ private fun SelectionActions(
     onDialog: (DialogState) -> Unit,
     onShare: (List<File>) -> Unit,
     protectedPaths: Set<String>,
+    favorites: List<Favorite>,
+    noMedia: Set<String>,
     onOpenComic: (String) -> Unit,
     onOpenWith: (String) -> Unit,
 ) {
     val selected = entries.filter { it.path in state.selection }
     val requestAuth = rememberRequestAuth()
     var securityMenu by remember { mutableStateOf(false) }
+    var extractMenu by remember { mutableStateOf(false) }
+    val folders = selected.filter { it.isDirectory }.map { it.path }
     val plainFiles = selected.filter { !it.isDirectory && !CfEnc.isEncryptedName(it.name) }.map { it.path }
     val encFiles = selected.filter { !it.isDirectory && CfEnc.isEncryptedName(it.name) }.map { it.path }
     val single = selected.singleOrNull()
@@ -717,7 +1006,15 @@ private fun SelectionActions(
     Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xxs)) {
         ActionButton(Icons.Default.ContentCopy, R.string.copy, onClick = vm::copySelection)
         if (kind == LocationKind.ARCHIVE) {
-            ActionButton(Icons.Default.FolderZip, R.string.extract) { vm.extractFromCurrentArchive(selected.map { it.path }) }
+            Box {
+                ActionButton(Icons.Default.Unarchive, R.string.extract) { extractMenu = true }
+                ExtractMenu(extractMenu, { extractMenu = false }) { mode ->
+                    val picked = selected.map { it.path }
+                    if (mode == ExtractMode.ELSEWHERE) {
+                        onDialog(DialogState.ExtractTo(emptyList(), picked, true, File(ArchiveLocation.archiveOf(state.tab.path)).parent ?: vm.rootPath))
+                    } else vm.extractFromCurrentArchive(picked, mode)
+                }
+            }
             if (single != null && comicCapable(single.path, single.isDirectory)) ActionButton(Icons.AutoMirrored.Filled.MenuBook, R.string.comic_open) { onOpenComic(single.path) }
             return@Row
         }
@@ -725,12 +1022,26 @@ private fun SelectionActions(
         ActionButton(Icons.Default.DeleteOutline, R.string.delete) { onDialog(if (kind == LocationKind.REMOTE) DialogState.RemoteDelete else DialogState.Delete) }
         if (selected.size == 1) ActionButton(Icons.Default.Edit, R.string.rename) { onDialog(DialogState.Rename(selected[0].path, selected[0].name)) }
         if (kind == LocationKind.REMOTE) return@Row
+        if (single != null && single.isDirectory && vm.canFavorite(single.path)) {
+            val starred = favorites.any { it.path == FavoritesStore.normalize(single.path) }
+            ActionButton(if (starred) Icons.Default.Star else Icons.Default.StarBorder, if (starred) R.string.fav_unstar else R.string.fav_star) {
+                vm.toggleFavorite(single.path)
+            }
+        }
         ActionButton(Icons.Default.Share, R.string.share) { onShare(selected.filter { !it.isDirectory }.map { File(it.path) }) }
         if (single != null && comicCapable(single.path, single.isDirectory)) ActionButton(Icons.AutoMirrored.Filled.MenuBook, R.string.comic_open) { onOpenComic(single.path) }
         if (single != null && !single.isDirectory) ActionButton(Icons.AutoMirrored.Filled.OpenInNew, R.string.open_with_short) { onOpenWith(single.path) }
         if (single != null) ActionButton(Icons.Default.Info, R.string.properties) { onDialog(DialogState.Properties(single.path)) }
         ActionButton(Icons.Default.FolderZip, R.string.compress) { onDialog(DialogState.Compress(selected.map { it.path })) }
-        if (archives.isNotEmpty()) ActionButton(Icons.Default.FolderZip, R.string.extract_here) { vm.extractArchives(archives) }
+        if (archives.isNotEmpty()) {
+            Box {
+                ActionButton(Icons.Default.Unarchive, R.string.extract_here) { extractMenu = true }
+                ExtractMenu(extractMenu, { extractMenu = false }) { mode ->
+                    if (mode == ExtractMode.ELSEWHERE) onDialog(DialogState.ExtractTo(archives, null, false, state.tab.path))
+                    else vm.extractArchives(archives, mode)
+                }
+            }
+        }
         Box {
             ActionButton(Icons.Default.MoreHoriz, R.string.security_menu) { securityMenu = true }
             ChoiMenu(securityMenu, { securityMenu = false }) {
@@ -742,6 +1053,11 @@ private fun SelectionActions(
                     } else {
                         item(R.string.protect_folder) { requestAuth(R.string.auth_subtitle_change, true) { vm.setProtected(single.path, true) } }
                     }
+                }
+                if (folders.isNotEmpty()) {
+                    // All selected folders already hidden from galleries: offer to show them again, otherwise hide all.
+                    val allMarked = folders.all { it in noMedia }
+                    item(if (allMarked) R.string.nomedia_off else R.string.nomedia_on) { vm.toggleNoMedia(folders, on = !allMarked) }
                 }
                 item(R.string.hide_items) { vm.hide(selected.map { it.path }) }
                 if (plainFiles.isNotEmpty()) {
@@ -758,6 +1074,20 @@ private fun SelectionActions(
                     item(R.string.decrypt_view) { onDialog(DialogState.Crypto(CryptoAction.VIEW, encFiles)) }
                 }
             }
+        }
+    }
+}
+
+/** 여기에 풀기 / 폴더로 풀기 / 다른 위치에 풀기. Nothing existing is overwritten in any of them. */
+@Composable
+private fun ExtractMenu(expanded: Boolean, onDismiss: () -> Unit, onPick: (ExtractMode) -> Unit) {
+    ChoiMenu(expanded, onDismiss) {
+        listOf(
+            ExtractMode.HERE to R.string.extract_mode_here,
+            ExtractMode.FOLDER to R.string.extract_mode_folder,
+            ExtractMode.ELSEWHERE to R.string.extract_mode_elsewhere,
+        ).forEach { (mode, label) ->
+            DropdownMenuItem({ Text(stringResource(label)) }, { onDismiss(); onPick(mode) })
         }
     }
 }

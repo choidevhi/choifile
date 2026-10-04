@@ -58,7 +58,11 @@ import com.choidev.choifile.crypto.CfEncFormatException
 import com.choidev.choifile.security.AppPrefs
 import com.choidev.choifile.security.ProtectedFolders
 import com.choidev.choifile.security.SavedTab
+import com.choidev.choifile.storage.Favorite
+import com.choidev.choifile.storage.FavoriteAdd
+import com.choidev.choifile.storage.FavoritesStore
 import com.choidev.choifile.storage.FileItem
+import com.choidev.choifile.storage.NoMedia
 import com.choidev.choifile.storage.FileStore
 import com.choidev.choifile.storage.LocalFileStore
 import com.choidev.choifile.storage.SortKey
@@ -105,7 +109,17 @@ sealed interface ConnectionTest {
 data class Tab(val id: Int, val path: String, val grid: Boolean = false)
 
 /** Items of one folder. [path] tells which folder, so a stale listing is never shown for another one. */
-data class Listing(val path: String, val items: List<FileItem>, val error: Boolean = false, val locked: Boolean = false)
+data class Listing(
+    val path: String,
+    val items: List<FileItem>,
+    val error: Boolean = false,
+    val locked: Boolean = false,
+    /** Folders in [items] that contain a .nomedia file (local folders only). */
+    val noMedia: Set<String> = emptySet(),
+)
+
+/** Where an archive goes: next to it (merged), into a new folder named after it, or merged into a chosen folder. */
+enum class ExtractMode { HERE, FOLDER, ELSEWHERE }
 
 data class Clipboard(val paths: List<String>, val move: Boolean)
 
@@ -237,7 +251,7 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val items = listLocation(q.path).filter { q.hidden || !it.isHidden }
                 _listError.value = null
-                Listing(q.path, sortItems(items, q.sort, q.ascending))
+                Listing(q.path, sortItems(items, q.sort, q.ascending), noMedia = noMediaIn(q.path, items))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -262,7 +276,8 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
         if (protection.lockedRoot(physicalPath(path)) != null) return@withContext Listing(path, emptyList(), locked = true)
         val s = _state.value
         try {
-            Listing(path, sortItems(listLocation(path).filter { s.showHidden || !it.isHidden }, s.sort, s.ascending))
+            val items = listLocation(path).filter { s.showHidden || !it.isHidden }
+            Listing(path, sortItems(items, s.sort, s.ascending), noMedia = noMediaIn(path, items))
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -327,6 +342,7 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
         }
         cache.listFiles()?.forEach { f -> if (f.name != "image_cache") f.deleteRecursively() }
         AppStores.readingPositions(app).clear()
+        com.choidev.choifile.util.VideoDurations.clear()
         val after = cache.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
         (before - after).coerceAtLeast(0)
     }
@@ -426,6 +442,9 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
 
     fun selectAll() = _state.update { s -> s.copy(selection = entries.value.map { it.path }.toSet()) }
     fun clearSelection() = _state.update { it.copy(selection = emptySet()) }
+
+    /** Drag-to-select replaces the whole selection while the finger moves. */
+    fun setSelection(paths: Set<String>) = _state.update { if (it.selection == paths) it else it.copy(selection = paths) }
     fun clearClipboard() = _state.update { it.copy(clipboard = null) }
 
     fun copySelection() = toClipboard(move = false)
@@ -637,6 +656,81 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
 
     fun emptyTrash() = runOp { store.emptyTrash(); say(R.string.msg_trash_emptied); _trash.value = emptyList() }
 
+    // ---- favorites (drawer) ----
+
+    private val favoriteStore = AppStores.favorites(app)
+    private val _favorites = MutableStateFlow(favoriteStore.all())
+    val favorites: StateFlow<List<Favorite>> = _favorites
+    private val _missingFavorites = MutableStateFlow<Set<String>>(emptySet())
+    /** Favorites whose folder no longer exists; refreshed whenever the drawer opens. */
+    val missingFavorites: StateFlow<Set<String>> = _missingFavorites
+
+    fun canFavorite(path: String) = kindOfPath(path) == LocationKind.LOCAL && FavoritesStore.isAllowed(path)
+    fun isFavorite(path: String) = favoriteStore.contains(path)
+
+    fun toggleFavorite(path: String) = runOp {
+        if (favoriteStore.contains(path)) {
+            favoriteStore.remove(path)
+            say(R.string.fav_removed)
+        } else {
+            val label = if (path.trimEnd('/') == rootPath.trimEnd('/')) str(R.string.drawer_internal) else null
+            when (favoriteStore.add(path, label)) {
+                FavoriteAdd.ADDED -> say(R.string.fav_added)
+                FavoriteAdd.DUPLICATE -> say(R.string.fav_duplicate)
+                FavoriteAdd.FORBIDDEN -> say(R.string.fav_forbidden)
+            }
+        }
+        _favorites.value = favoriteStore.all()
+    }
+
+    fun removeFavorite(path: String) { favoriteStore.remove(path); afterFavoritesChanged() }
+    fun renameFavorite(path: String, label: String) { favoriteStore.rename(path, label); afterFavoritesChanged() }
+    fun moveFavorite(from: Int, to: Int) { favoriteStore.move(from, to); afterFavoritesChanged() }
+
+    fun refreshFavorites() = viewModelScope.launch(Dispatchers.IO) { _missingFavorites.value = favoriteStore.missing() }
+
+    private fun afterFavoritesChanged() {
+        _favorites.value = favoriteStore.all()
+        refreshFavorites()
+    }
+
+    /** Standard folders shown under "저장소" in the drawer (label resource to path). */
+    val storageShortcuts: List<Pair<Int, String>> = listOf(
+        R.string.drawer_internal to rootPath,
+        R.string.drawer_download to File(rootPath, Environment.DIRECTORY_DOWNLOADS).path,
+        R.string.drawer_dcim to File(rootPath, Environment.DIRECTORY_DCIM).path,
+        R.string.drawer_pictures to File(rootPath, Environment.DIRECTORY_PICTURES).path,
+        R.string.drawer_documents to File(rootPath, Environment.DIRECTORY_DOCUMENTS).path,
+    )
+
+    // ---- .nomedia ("갤러리에서 숨기기") ----
+
+    private fun noMediaIn(path: String, items: List<FileItem>): Set<String> =
+        if (kindOfPath(path) != LocationKind.LOCAL) emptySet() else NoMedia.marked(items.filter { it.isDirectory }.map { File(it.path) })
+
+    fun hasNoMedia(path: String) = kindOfPath(path) == LocationKind.LOCAL && NoMedia.has(File(path))
+
+    /** Toggles .nomedia on [paths] (folders): on unless all of them already have it. Then asks the media scanner to look again. */
+    fun toggleNoMedia(paths: List<String>, on: Boolean? = null) {
+        val dirs = paths.filter { kindOfPath(it) == LocationKind.LOCAL }.map(::File).filter { it.isDirectory }
+        if (dirs.isEmpty()) return
+        if (dirs.any { protection.lockedRoot(it.path) != null }) return
+        val target = on ?: NoMedia.targetState(dirs)
+        clearSelection()
+        runOp {
+            val changed = NoMedia.setAll(dirs, target)
+            rescanMedia(changed)
+            say(if (target) R.string.nomedia_on_done else R.string.nomedia_off_done, dirs.size)
+        }
+    }
+
+    /** Hands the folders (and the files directly inside) to the media scanner so galleries pick up the change. */
+    private fun rescanMedia(dirs: List<File>) {
+        if (dirs.isEmpty()) return
+        val paths = dirs.flatMap { d -> listOf(d.path, File(d, NoMedia.NAME).path) + d.listFiles().orEmpty().filter { it.isFile }.take(500).map { it.path } }
+        runCatching { android.media.MediaScannerConnection.scanFile(getApplication(), paths.distinct().toTypedArray(), null, null) }
+    }
+
     // ---- protected folders ----
 
     fun isProtected(path: String) = protection.isProtected(path)
@@ -675,6 +769,8 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
         if (old == new) return
         protection.relocate(old, new)
         persistProtection()
+        favoriteStore.relocate(old, new)
+        _favorites.value = favoriteStore.all()
     }
 
     private fun persistProtection() {
@@ -879,43 +975,62 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- archives ----
 
-    /** Extracts local archives each into a new folder next to them. */
-    fun extractArchives(paths: List<String>) {
+    /**
+     * Extracts local archive files. [mode] HERE puts the contents next to each archive, FOLDER makes a new folder
+     * named after it, ELSEWHERE puts the contents into [target]. Nothing existing is ever overwritten.
+     */
+    fun extractArchives(paths: List<String>, mode: ExtractMode = ExtractMode.FOLDER, target: String? = null) {
         clearSelection()
+        if (!extractTargetOk(mode, target)) return
         runJob { token ->
             var n = 0
+            var last = ""
             for (p in paths) {
                 val f = File(p)
-                val format = ArchiveFormat.detect(f.name) ?: continue
-                val dest = store.uniqueChild(f.parentFile!!, archiveBaseName(f.name))
-                try {
-                    ArchiveExtractor.extract(f, format, dest, null, cancelled = { token.cancelled }, onProgress = throttledBytes())
-                } finally {
-                    ops.recordExtract(f, dest) // also after a cancel or failure, so the partial result can be undone
-                }
+                if (ArchiveFormat.detect(f.name) == null) continue
+                last = extractOne(f, null, mode, target, token)
                 n++
             }
-            say(R.string.msg_extracted, n)
+            if (n == 1) say(R.string.msg_extracted_to, last) else say(R.string.msg_extracted, n)
         }
     }
 
-    /** In an archive tab: extract [selected] entries (or everything when null) next to the archive file. */
-    fun extractFromCurrentArchive(selected: List<String>?) {
+    /** In an archive tab: extract [selected] entries (or everything when null); HERE/FOLDER are relative to the archive file. */
+    fun extractFromCurrentArchive(selected: List<String>?, mode: ExtractMode = ExtractMode.FOLDER, target: String? = null) {
         val tab = _state.value.tab.path
         if (kindOfPath(tab) != LocationKind.ARCHIVE) return
         clearSelection()
+        if (!extractTargetOk(mode, target)) return
         runJob { token ->
             val archive = File(ArchiveLocation.archiveOf(tab))
-            val format = ArchiveFormat.detect(archive.name) ?: throw IOException("not an archive")
-            val dest = store.uniqueChild(archive.parentFile!!, archiveBaseName(archive.name))
-            val select = selected?.map { ArchiveLocation.innerOf(it) }?.toSet()
-            val n = try {
+            val select = selected?.map { ArchiveLocation.innerOf(it) }?.filter { it.isNotEmpty() }?.toSet()
+            say(R.string.msg_extracted_to, extractOne(archive, select, mode, target, token))
+        }
+    }
+
+    private fun extractTargetOk(mode: ExtractMode, target: String?): Boolean {
+        if (mode != ExtractMode.ELSEWHERE) return true
+        val ok = target != null && File(target).isDirectory && !PathGuard(protection.paths, isLocked = { protection.lockedRoot(it) != null }).isExcluded(target)
+        if (!ok) runOp { say(R.string.msg_extract_target_bad) }
+        return ok
+    }
+
+    /** Returns a short description of where the result went, for the snackbar. */
+    private fun extractOne(archive: File, select: Set<String>?, mode: ExtractMode, target: String?, token: CancelToken): String {
+        val format = ArchiveFormat.detect(archive.name) ?: throw IOException("not an archive")
+        val parent = if (mode == ExtractMode.ELSEWHERE) File(target!!) else archive.parentFile!!
+        if (mode == ExtractMode.FOLDER) {
+            val dest = store.uniqueChild(parent, archiveBaseName(archive.name))
+            try {
                 ArchiveExtractor.extract(archive, format, dest, select, cancelled = { token.cancelled }, onProgress = throttledBytes())
             } finally {
-                ops.recordExtract(archive, dest)
+                ops.recordExtract(archive, dest) // also after a cancel or failure, so the partial result can be undone
             }
-            say(R.string.msg_extracted_files, n, dest.name)
+            return dest.name
         }
+        val moved = ArchiveExtractor.extractMerged(archive, format, parent, store::uniqueChild, select, cancelled = { token.cancelled }, onProgress = throttledBytes())
+        ops.recordExtractMerged(archive, moved)
+        return displayPath(parent.absolutePath)
     }
 
     fun createArchive(paths: List<String>, format: ArchiveFormat, name: String) {

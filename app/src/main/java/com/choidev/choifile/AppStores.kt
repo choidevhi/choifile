@@ -3,6 +3,7 @@ package com.choidev.choifile
 import android.content.Context
 import com.choidev.choifile.oplog.OperationLog
 import com.choidev.choifile.rules.RuleStore
+import com.choidev.choifile.storage.FavoritesStore
 import com.choidev.choifile.storage.PositionStore
 import java.io.File
 
@@ -15,6 +16,7 @@ object AppStores {
     @Volatile private var rules: RuleStore? = null
     @Volatile private var reading: PositionStore? = null
     @Volatile private var scroll: PositionStore? = null
+    @Volatile private var favorites: FavoritesStore? = null
 
     fun log(context: Context): OperationLog = log ?: synchronized(this) {
         log ?: OperationLog(File(context.applicationContext.filesDir, "operations.json")).also { log = it }
@@ -32,5 +34,10 @@ object AppStores {
     /** File list: last scroll position per folder, so tabs and "up" land where the user left off. */
     fun scrollPositions(context: Context): PositionStore = scroll ?: synchronized(this) {
         scroll ?: PositionStore(File(context.applicationContext.filesDir, "scroll_positions.json"), max = 300).also { scroll = it }
+    }
+
+    /** Drawer: the user's starred folders, in the user's order. */
+    fun favorites(context: Context): FavoritesStore = favorites ?: synchronized(this) {
+        favorites ?: FavoritesStore(File(context.applicationContext.filesDir, "favorites.json")).also { favorites = it }
     }
 }

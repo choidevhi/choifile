@@ -217,6 +217,7 @@ fun ArchiveCreateDialog(suggested: String, onConfirm: (String, ArchiveFormat) ->
                     RadioRow(format == it, ".${it.label}") { format = it }
                 }
                 Text(stringResource(R.string.archive_rar_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.archive_password_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         confirmButton = { PrimaryButton({ onConfirm(name, format) }, enabled = name.isNotBlank() && '/' !in name) { Text(stringResource(R.string.create)) } },

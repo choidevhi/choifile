@@ -23,6 +23,9 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.video.VideoFrameDecoder
 import com.choidev.choifile.browser.BrowserViewModel
 import com.choidev.choifile.archive.ArchiveFormat
 import com.choidev.choifile.archive.ArchiveLocation
@@ -81,6 +84,11 @@ class MainActivity : FragmentActivity() {
         appLocked = viewModel.prefs.appLock
         viewModel.viewCacheDir().deleteRecursively() // leftovers of decrypted copies after a crash or kill
         IndexWorker.schedule(this)
+        // Thumbnails: Coil decodes images and, with the video decoder, a frame of each video. Sized to the cell,
+        // cancelled when the cell leaves the screen, cached in the app's own cache (cleared by Settings > 캐시 삭제).
+        SingletonImageLoader.setSafe { ctx ->
+            ImageLoader.Builder(ctx).components { add(VideoFrameDecoder.Factory()) }.build()
+        }
         enableEdgeToEdge()
         setContent {
             ChoiTheme {
