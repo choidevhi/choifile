@@ -1,0 +1,55 @@
+package com.choidev.choifile.security
+
+import android.content.Context
+import com.choidev.choifile.storage.SortKey
+
+/** Small SharedPreferences wrapper for everything that must survive a restart. */
+class AppPrefs(context: Context) {
+    private val sp = context.getSharedPreferences("choifile_prefs", Context.MODE_PRIVATE)
+
+    var tabs: List<SavedTab>
+        get() = TabsCodec.decode(sp.getString("tabs", null))
+        set(v) = sp.edit().putString("tabs", TabsCodec.encode(v)).apply()
+    var currentTab: Int
+        get() = sp.getInt("current_tab", 0)
+        set(v) = sp.edit().putInt("current_tab", v).apply()
+    var sort: SortKey
+        get() = runCatching { SortKey.valueOf(sp.getString("sort", "NAME")!!) }.getOrDefault(SortKey.NAME)
+        set(v) = sp.edit().putString("sort", v.name).apply()
+    var ascending: Boolean
+        get() = sp.getBoolean("ascending", true)
+        set(v) = sp.edit().putBoolean("ascending", v).apply()
+    var showHidden: Boolean
+        get() = sp.getBoolean("show_hidden", false)
+        set(v) = sp.edit().putBoolean("show_hidden", v).apply()
+
+    var appLock: Boolean
+        get() = sp.getBoolean("app_lock", false)
+        set(v) = sp.edit().putBoolean("app_lock", v).apply()
+    /** Protected-folder unlock duration in seconds; 0 = re-lock immediately. */
+    var relockSeconds: Int
+        get() = sp.getInt("relock_seconds", 60)
+        set(v) = sp.edit().putInt("relock_seconds", v).apply()
+    var protectedFolders: Set<String>
+        get() = sp.getStringSet("protected_folders", emptySet()).orEmpty().toSet()
+        set(v) = sp.edit().putStringSet("protected_folders", v).apply()
+
+    /** File-server settings. The servers themselves never start automatically; only these choices are remembered. */
+    var serverRoot: String
+        get() = sp.getString("server_root", "") ?: ""
+        set(v) = sp.edit().putString("server_root", v).apply()
+    var httpPort: Int
+        get() = sp.getInt("http_port", 8080)
+        set(v) = sp.edit().putInt("http_port", v).apply()
+    var ftpPort: Int
+        get() = sp.getInt("ftp_port", 2121)
+        set(v) = sp.edit().putInt("ftp_port", v).apply()
+    var serverUpload: Boolean
+        get() = sp.getBoolean("server_upload", true)
+        set(v) = sp.edit().putBoolean("server_upload", v).apply()
+
+    /** JSON written by SavedSearchCodec. */
+    var savedSearches: String
+        get() = sp.getString("saved_searches", "") ?: ""
+        set(v) = sp.edit().putString("saved_searches", v).apply()
+}
