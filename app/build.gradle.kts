@@ -13,6 +13,8 @@ android {
         targetSdk = 36
         versionCode = 7
         versionName = "0.4.3"
+        // -Pchoifile.abi=arm64-v8a builds a single-ABI APK (smaller download for phones).
+        providers.gradleProperty("choifile.abi").orNull?.let { ndk { abiFilters += it.split(",") } }
     }
     // Release key comes from ~/.gradle/gradle.properties (never committed).
     val releaseStore = providers.gradleProperty("CHOIDEV_RELEASE_STORE_FILE").orNull
