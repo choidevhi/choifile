@@ -18,7 +18,23 @@ Licenses are listed as published by each project; check the upstream repositorie
 | SLF4J (slf4j-nop) | 2.0.17 | silences library logging (no log output at all) | MIT |
 | AndroidX (Compose, WorkManager, Biometric, Lifecycle, Core, Fragment, Activity) | see build file | UI, background index refresh | Apache-2.0 |
 | Coil | 3.3.0 | image thumbnails | Apache-2.0 |
-| AndroidX Media3 | 1.8.0 | video playback | Apache-2.0 |
+| AndroidX Media3 | 1.8.0 | video playback, container extractors, subtitles | Apache-2.0 |
+| NextLib media3ext (io.github.anilbeesetti:nextlib-media3ext) | 1.8.0-0.9.0 | FFmpeg audio/video decoders for Media3 | **GPL-3.0** (see note) |
+| ↳ FFmpeg (bundled native libavcodec, libavutil, libswresample, libswscale) | 6.0 | software decoding | LGPL-3.0-or-later as built (`--enable-version3`, no `--enable-gpl`) |
+| ↳ libvpx (bundled native) | 1.13.0 | VP8 / VP9 decoding | BSD-3-Clause |
+| ↳ Mbed TLS (bundled native) | 3.4.1 | linked into the FFmpeg build (unused by choifile) | Apache-2.0 |
+
+Note on the FFmpeg decoders (added in v0.4.3): Media3 does not publish its FFmpeg extension as a binary, so a
+prebuilt one is used. Two exist on Maven Central for Media3 1.8.0, and both are published under GPL-3.0:
+`org.jellyfin.media3:media3-ffmpeg-decoder:1.8.0+1` (audio only: FLAC, ALAC, MP3, AAC, AC3, E-AC3, DTS, TrueHD/MLP,
+PCM A-law/µ-law) and `io.github.anilbeesetti:nextlib-media3ext:1.8.0-0.9.0` (the one choifile ships: the same audio
+set plus Vorbis, Opus and AMR, and video decoders for H.264, HEVC, MPEG-2, VP8 and VP9). FFmpeg itself is built
+LGPL-3.0, but the Java/JNI wrapper around it is GPL-3.0, so **an APK that contains it is a combined work under
+GPL-3.0**: whoever distributes that APK must offer the complete corresponding source of the whole app under
+GPL-3.0-compatible terms. If that is not acceptable for a release, remove the dependency from `app/build.gradle.kts`
+and replace `NextRenderersFactory` with `DefaultRenderersFactory` in `ui/VideoPlayer.kt`; playback then falls back to
+the device's own decoders only. Not covered by either build: APE (Monkey's Audio), WMA/WMV, RealMedia, and AV1 in
+software (AV1 still plays where the device has a hardware decoder).
 
 Added in v0.3.0: no new third-party library. The PDF viewer uses the platform `android.graphics.pdf.PdfRenderer`,
 the Markdown viewer, the HTTP file server and the FTP file server are small implementations written for this app

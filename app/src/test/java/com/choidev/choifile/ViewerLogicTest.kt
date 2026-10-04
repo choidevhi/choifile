@@ -205,6 +205,5 @@ class ViewerLogicTest {
         assertEquals("1:05", ScrubMath.format(65_400))
         assertEquals("1:05.4", ScrubMath.format(65_400, tenths = true))
         assertEquals("1:02:03", ScrubMath.format(3_723_000))
-        assertEquals(ScrubMath.thumbBucket(10_050, 60_000), ScrubMath.thumbBucket(10_090, 60_000))
     }
 }

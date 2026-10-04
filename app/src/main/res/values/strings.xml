@@ -499,6 +499,14 @@
     <string name="vp_back_step">%1$d초 뒤로</string>
     <string name="vp_fwd_step">%1$d초 앞으로</string>
     <string name="vp_scrub_speed">탐색 속도 %1$s (막대에서 손가락을 멀리 둘수록 느려짐)</string>
+    <string name="vp_tracks">오디오·자막 트랙</string>
+    <string name="vp_audio">오디오</string>
+    <string name="vp_subtitles">자막</string>
+    <string name="vp_subtitles_off">끄기</string>
+    <string name="vp_no_tracks">선택할 트랙이 없습니다</string>
+    <string name="vp_unsupported">재생할 수 없는 트랙</string>
+    <string name="vp_error">재생할 수 없습니다: %1$s</string>
+    <string name="grid_select">선택</string>
 
     <!-- 만화 뷰어 -->
     <string name="comic_open">만화로 보기</string>

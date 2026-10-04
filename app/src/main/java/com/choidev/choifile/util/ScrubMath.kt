@@ -42,12 +42,6 @@ object ScrubMath {
     /** One video frame in ms for [fps] (falls back to 30 fps when the stream does not say). */
     fun frameMs(fps: Float): Long = if (fps.isNaN() || fps <= 1f || fps > 480f) 33L else (1000f / fps).roundToLong().coerceAtLeast(1)
 
-    /** Cache bucket for preview thumbnails: nearby times share one decoded frame. */
-    fun thumbBucket(positionMs: Long, durationMs: Long): Long {
-        val step = (durationMs / 400).coerceIn(100, 2_000)
-        return positionMs / step * step
-    }
-
     /** "1:05", "1:02:03", with optional tenths ("1:05.3") for fine seeking. */
     fun format(ms: Long, tenths: Boolean = false): String {
         val t = ms.coerceAtLeast(0)

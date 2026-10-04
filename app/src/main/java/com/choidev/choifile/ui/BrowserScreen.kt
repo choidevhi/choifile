@@ -129,8 +129,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.choidev.choifile.browser.TapAction
+import com.choidev.choifile.browser.TapRouting
+import com.choidev.choifile.browser.TapTarget
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
@@ -575,14 +581,14 @@ private fun FileList(
     }
     DisposableEffect(tab.path, tab.grid) { onDispose { vm.saveScrollPosition(tab.path, position()) } }
 
-    fun click(item: FileItem) = when {
-        !interactive -> Unit
-        selection.isNotEmpty() -> vm.toggleSelect(item.path)
-        item.isDirectory -> vm.openDir(item.path)
-        else -> onOpenFile(item)
+    // List: the icon starts (or extends) multi-select, the row opens. Grid: the cell opens, the corner check selects.
+    fun tap(item: FileItem, target: TapTarget) {
+        if (!interactive) return
+        when (TapRouting.route(target, tab.grid, selecting = selection.isNotEmpty())) {
+            TapAction.TOGGLE -> vm.toggleSelect(item.path)
+            TapAction.OPEN -> if (item.isDirectory) vm.openDir(item.path) else onOpenFile(item)
+        }
     }
-    // The icon/thumbnail is its own target: it starts (or extends) multi-select instead of opening.
-    fun iconClick(item: FileItem) { if (interactive) vm.toggleSelect(item.path) }
 
     // ---- long-press and drag to select a range (list and grid) ----
     val haptic = LocalHapticFeedback.current
@@ -684,23 +690,23 @@ private fun FileList(
         ) {
             items(entries, key = { it.path }) { item ->
                 val selected = item.path in selection
-                Column(
+                Box(
                     Modifier
                         .padding(Space.xs)
                         .clip(RoundedCornerShape(Radius.lg))
                         .background(if (selected) c.selection else c.background)
                         .border(Hairline, if (selected) c.ring else Color.Transparent, RoundedCornerShape(Radius.lg))
-                        .clickable { click(item) }
-                        .padding(Space.sm),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                        .clickable { tap(item, TapTarget.BODY) },
                 ) {
-                    Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(Radius.lg)).clickable { iconClick(item) }) {
-                        FileThumb(item, Modifier.fillMaxSize(), large = true, privateFolder = privateFolder)
-                        if (item.path in noMedia) NoMediaBadge(Modifier.align(Alignment.TopStart).padding(Space.xs))
-                        if (selected) SelectedBadge(Modifier.align(Alignment.TopEnd).padding(Space.xs))
+                    Column(Modifier.padding(Space.sm), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(Radius.lg))) {
+                            FileThumb(item, Modifier.fillMaxSize(), large = true, privateFolder = privateFolder)
+                            if (item.path in noMedia) NoMediaBadge(Modifier.align(Alignment.TopEnd).padding(Space.xs))
+                        }
+                        Spacer(Modifier.height(Space.sm))
+                        Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, style = MaterialTheme.typography.labelMedium)
                     }
-                    Spacer(Modifier.height(Space.sm))
-                    Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, style = MaterialTheme.typography.labelMedium)
+                    GridCheck(selected, selecting = selection.isNotEmpty(), Modifier.align(Alignment.TopStart)) { tap(item, TapTarget.CHECK) }
                 }
             }
         }
@@ -712,11 +718,11 @@ private fun FileList(
                     Modifier
                         .fillMaxWidth()
                         .background(if (selected) c.selection else c.background)
-                        .clickable { click(item) }
+                        .clickable { tap(item, TapTarget.BODY) }
                         .padding(horizontal = Space.lg, vertical = Space.sm),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(Modifier.size(44.dp).clip(RoundedCornerShape(Radius.lg)).clickable { iconClick(item) }) {
+                    Box(Modifier.size(44.dp).clip(RoundedCornerShape(Radius.lg)).clickable { tap(item, TapTarget.ICON) }) {
                         FileThumb(item, Modifier.fillMaxSize(), large = false, privateFolder = privateFolder)
                         if (selected) {
                             Box(Modifier.fillMaxSize().background(c.primary.copy(alpha = 0.85f)), contentAlignment = Alignment.Center) {
@@ -750,11 +756,25 @@ private fun FileList(
     }
 }
 
+/**
+ * Round check in a grid cell's top-left corner: a 40dp touch target around a 22dp circle. Filled when selected,
+ * a clear ring on every cell while selecting, and a faint ring otherwise (tapping it starts multi-select).
+ */
 @Composable
-private fun SelectedBadge(modifier: Modifier) {
+private fun GridCheck(selected: Boolean, selecting: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = ChoiTheme.colors
-    Box(modifier.size(22.dp).background(c.primary, CircleShape).border(1.5.dp, c.background, CircleShape), contentAlignment = Alignment.Center) {
-        Icon(Icons.Default.Check, null, Modifier.size(IconSize.xs), tint = c.primaryForeground)
+    val label = stringResource(R.string.grid_select)
+    Box(
+        modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = label, onClick = onClick).semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            selected -> Box(Modifier.size(22.dp).background(c.primary, CircleShape).border(1.5.dp, c.background, CircleShape), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Check, null, Modifier.size(IconSize.xs), tint = c.primaryForeground)
+            }
+            selecting -> Box(Modifier.size(22.dp).background(Color.Black.copy(alpha = 0.25f), CircleShape).border(1.5.dp, Color.White, CircleShape))
+            else -> Box(Modifier.size(20.dp).alpha(0.55f).background(Color.Black.copy(alpha = 0.15f), CircleShape).border(1.dp, Color.White, CircleShape))
+        }
     }
 }
 

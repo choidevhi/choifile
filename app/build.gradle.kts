@@ -11,8 +11,8 @@ android {
         applicationId = "com.choidev.choifile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.4.2"
+        versionCode = 7
+        versionName = "0.4.3"
     }
     // Release key comes from ~/.gradle/gradle.properties (never committed).
     val releaseStore = providers.gradleProperty("CHOIDEV_RELEASE_STORE_FILE").orNull
@@ -33,6 +33,9 @@ android {
         }
     }
     packaging {
+        // The FFmpeg libraries are ~5.5 MB per ABI; store them compressed (extracted at install) so the
+        // sideloaded APK stays about half the size it would be with page-aligned uncompressed libraries.
+        jniLibs { useLegacyPackaging = true }
         resources {
             excludes += setOf(
                 "META-INF/versions/**", "META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*",
@@ -61,6 +64,8 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-video:3.3.0")
     implementation("androidx.media3:media3-exoplayer:1.8.0")
     implementation("androidx.media3:media3-ui:1.8.0")
+    // FFmpeg audio/video decoders for Media3 1.8.0 (GPL-3.0 wrapper, see THIRD_PARTY.md).
+    implementation("io.github.anilbeesetti:nextlib-media3ext:1.8.0-0.9.0")
 
     implementation("androidx.work:work-runtime-ktx:2.10.5")
     implementation("org.apache.commons:commons-compress:1.28.0")
