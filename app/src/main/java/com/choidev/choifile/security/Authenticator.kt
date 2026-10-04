@@ -19,6 +19,12 @@ class Authenticator(private val activity: FragmentActivity) {
 
     private fun status() = BiometricManager.from(activity).canAuthenticate(allowed)
 
+    /**
+     * Told when a prompt opens (true) and when it finishes (false). The PIN/pattern screen is a separate activity,
+     * so the app is briefly "in the background" during authentication; the grace timer must ignore that.
+     */
+    var onPromptActive: ((Boolean) -> Unit)? = null
+
     /** True when a prompt can really be shown (biometric enrolled or a screen lock is set). */
     fun isAvailable(): Boolean = status() == BiometricManager.BIOMETRIC_SUCCESS
 
@@ -37,10 +43,17 @@ class Authenticator(private val activity: FragmentActivity) {
             activity,
             ContextCompat.getMainExecutor(activity),
             object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) = onResult(true)
-                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) = onResult(false)
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    onPromptActive?.invoke(false)
+                    onResult(true)
+                }
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    onPromptActive?.invoke(false)
+                    onResult(false)
+                }
             },
         )
+        onPromptActive?.invoke(true)
         val info = BiometricPrompt.PromptInfo.Builder()
             .setTitle(title)
             .setAllowedAuthenticators(allowed)

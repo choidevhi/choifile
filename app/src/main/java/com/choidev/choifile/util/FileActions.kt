@@ -3,6 +3,9 @@ package com.choidev.choifile.util
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.ResolveInfo
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -33,17 +36,55 @@ fun kindOf(file: File): FileKind = when (file.extensionLower()) {
     else -> FileKind.OTHER
 }
 
-private fun mimeOf(file: File): String =
-    MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extensionLower()) ?: "*/*"
+fun mimeOf(file: File): String = when (file.extensionLower()) {
+    "cbz" -> "application/vnd.comicbook+zip"
+    else -> MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extensionLower()) ?: "*/*"
+}
 
 private fun uriOf(context: Context, file: File): Uri =
     FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 
+private fun viewIntent(context: Context, file: File): Intent = Intent(Intent.ACTION_VIEW)
+    .setDataAndType(uriOf(context, file), mimeOf(file))
+    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
 fun openWithOtherApp(context: Context, file: File) {
-    val view = Intent(Intent.ACTION_VIEW)
-        .setDataAndType(uriOf(context, file), mimeOf(file))
-        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    launchChooser(context, view, R.string.chooser_open)
+    launchChooser(context, viewIntent(context, file), R.string.chooser_open)
+}
+
+/** An activity of another app that can view a file. */
+data class AppTarget(val packageName: String, val activity: String, val label: String, val icon: Drawable?)
+
+/**
+ * Apps that accept ACTION_VIEW for this file's MIME type (needs the <queries> entry in the manifest on Android 11+).
+ * Our own app is left out; the built-in viewer is offered separately.
+ */
+fun appsFor(context: Context, file: File): List<AppTarget> {
+    val pm = context.packageManager
+    val intent = viewIntent(context, file)
+    val infos: List<ResolveInfo> = if (Build.VERSION.SDK_INT >= 33) {
+        pm.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong()))
+    } else {
+        @Suppress("DEPRECATION") pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+    }
+    return infos
+        .filter { it.activityInfo.packageName != context.packageName }
+        .map { AppTarget(it.activityInfo.packageName, it.activityInfo.name, it.loadLabel(pm).toString(), runCatching { it.loadIcon(pm) }.getOrNull()) }
+        .distinctBy { it.packageName + "/" + it.activity }
+        .sortedBy { it.label.lowercase() }
+}
+
+/** Opens [file] directly in one app's activity. False when that app is gone or refuses the file. */
+fun launchWith(context: Context, file: File, packageName: String, activity: String): Boolean {
+    val intent = viewIntent(context, file).setClassName(packageName, activity).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    return try {
+        context.startActivity(intent)
+        true
+    } catch (_: ActivityNotFoundException) {
+        false
+    } catch (_: SecurityException) {
+        false
+    }
 }
 
 fun shareFiles(context: Context, files: List<File>) {

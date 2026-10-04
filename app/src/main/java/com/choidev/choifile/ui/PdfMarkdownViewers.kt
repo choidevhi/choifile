@@ -33,7 +33,6 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,7 +40,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -182,7 +180,7 @@ fun PdfViewer(file: File) {
             Surface(tonalElevation = 3.dp) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton({ page = (page - 1).coerceAtLeast(0) }, enabled = page > 0) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.pdf_prev)) }
-                    TextButton({ jump = true }) { Text(stringResource(R.string.pdf_page_of, page + 1, pageCount)) }
+                    GhostButton({ jump = true }) { Text(stringResource(R.string.pdf_page_of, page + 1, pageCount)) }
                     IconButton({ page = (page + 1).coerceAtMost(pageCount - 1) }, enabled = page < pageCount - 1) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.pdf_next)) }
                     Box(Modifier.weight(1f))
                     IconButton({ zoom(scale - 0.5f) }, enabled = scale > 1f) { Icon(Icons.Default.Remove, stringResource(R.string.pdf_zoom_out)) }
@@ -196,7 +194,7 @@ fun PdfViewer(file: File) {
     if (jump) {
         var text by remember { mutableStateOf((page + 1).toString()) }
         val target = text.toIntOrNull()?.takeIf { it in 1..pageCount }
-        AlertDialog(
+        ChoiDialog(
             onDismissRequest = { jump = false },
             title = { Text(stringResource(R.string.pdf_goto)) },
             text = {
@@ -206,8 +204,8 @@ fun PdfViewer(file: File) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
             },
-            confirmButton = { TextButton({ page = target!! - 1; jump = false }, enabled = target != null) { Text(stringResource(R.string.ok)) } },
-            dismissButton = { TextButton({ jump = false }) { Text(stringResource(R.string.cancel)) } },
+            confirmButton = { PrimaryButton({ page = target!! - 1; jump = false }, enabled = target != null) { Text(stringResource(R.string.ok)) } },
+            dismissButton = { OutlineButton({ jump = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }

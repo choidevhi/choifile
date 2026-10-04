@@ -21,7 +21,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,7 +38,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -95,7 +93,7 @@ fun RulesScreen(vm: BrowserViewModel, onOpenLog: () -> Unit, onBack: () -> Unit)
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            ChoiTopBar(
                 title = { Text(stringResource(R.string.rules_title)) },
                 navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 actions = {
@@ -123,8 +121,8 @@ fun RulesScreen(vm: BrowserViewModel, onOpenLog: () -> Unit, onBack: () -> Unit)
                             Text(last, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (r.trigger == RuleTrigger.DAILY && !r.reviewed) Text(stringResource(R.string.rules_needs_review), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                TextButton({ preview = PreviewRequest(r, PreviewMode.RUN) }) { Text(stringResource(R.string.rules_run)) }
-                                TextButton({ deleting = r }) { Text(stringResource(R.string.delete)) }
+                                GhostButton({ preview = PreviewRequest(r, PreviewMode.RUN) }) { Text(stringResource(R.string.rules_run)) }
+                                GhostButton({ deleting = r }) { Text(stringResource(R.string.delete)) }
                             }
                         }
                     },
@@ -148,12 +146,12 @@ fun RulesScreen(vm: BrowserViewModel, onOpenLog: () -> Unit, onBack: () -> Unit)
             onDismiss = { preview = null })
     }
     deleting?.let { r ->
-        AlertDialog(
+        ChoiDialog(
             onDismissRequest = { deleting = null },
             title = { Text(stringResource(R.string.rules_delete_title)) },
             text = { Text(stringResource(R.string.rules_delete_message, r.name)) },
-            confirmButton = { TextButton({ vm.deleteRule(r.id); deleting = null }) { Text(stringResource(R.string.delete)) } },
-            dismissButton = { TextButton({ deleting = null }) { Text(stringResource(R.string.cancel)) } },
+            confirmButton = { DestructiveButton({ vm.deleteRule(r.id); deleting = null }) { Text(stringResource(R.string.delete)) } },
+            dismissButton = { OutlineButton({ deleting = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }
@@ -210,7 +208,7 @@ private fun RuleEditor(vm: BrowserViewModel, initial: Rule, onSave: (Rule) -> Un
     val maxBytes = maxMb.toDoubleOrNull()?.let { (it * 1048576).toLong() }
     val valid = name.isNotBlank() && folder.isNotBlank() && (action == RuleAction.TRASH || target.isNotBlank())
 
-    AlertDialog(
+    ChoiDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(if (initial.name.isEmpty()) R.string.rules_new else R.string.rules_edit)) },
         text = {
@@ -248,7 +246,7 @@ private fun RuleEditor(vm: BrowserViewModel, initial: Rule, onSave: (Rule) -> Un
             }
         },
         confirmButton = {
-            TextButton({
+            GhostButton({
                 onSave(initial.copy(
                     name = name.trim(),
                     condition = RuleCondition(folder, recursive, pattern.trim(), parseExtensions(exts), days.toIntOrNull(), minBytes, maxBytes),
@@ -256,7 +254,7 @@ private fun RuleEditor(vm: BrowserViewModel, initial: Rule, onSave: (Rule) -> Un
                 ))
             }, enabled = valid) { Text(stringResource(R.string.save)) }
         },
-        dismissButton = { TextButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
+        dismissButton = { OutlineButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 
     pick?.let { which ->
@@ -267,7 +265,7 @@ private fun RuleEditor(vm: BrowserViewModel, initial: Rule, onSave: (Rule) -> Un
 
 @Composable
 private fun FolderField(label: Int, value: String, root: String, onClick: () -> Unit) {
-    OutlinedButton(onClick, Modifier.fillMaxWidth()) {
+    OutlineButton(onClick, Modifier.fillMaxWidth()) {
         Column(Modifier.weight(1f)) {
             Text(stringResource(label), style = MaterialTheme.typography.labelSmall)
             Text(value.removePrefix(root).ifEmpty { if (value.isEmpty()) stringResource(R.string.rules_pick_folder) else "/" }, maxLines = 1, overflow = TextOverflow.StartEllipsis)
@@ -281,7 +279,7 @@ private fun RulePreviewDialog(vm: BrowserViewModel, rule: Rule, mode: PreviewMod
     val context = LocalContext.current
     val preview by produceState<BrowserViewModel.RulePreview?>(null, rule) { value = vm.previewRule(rule) }
     val p = preview
-    AlertDialog(
+    ChoiDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.rules_preview_title, rule.name)) },
         text = {
@@ -314,9 +312,9 @@ private fun RulePreviewDialog(vm: BrowserViewModel, rule: Rule, mode: PreviewMod
         },
         confirmButton = {
             val ok = p != null && p.problem == null && (mode == PreviewMode.ENABLE || p.items.isNotEmpty())
-            TextButton(onConfirm, enabled = ok) { Text(stringResource(if (mode == PreviewMode.ENABLE) R.string.rules_confirm_enable else R.string.rules_confirm_run)) }
+            GhostButton(onConfirm, enabled = ok) { Text(stringResource(if (mode == PreviewMode.ENABLE) R.string.rules_confirm_enable else R.string.rules_confirm_run)) }
         },
-        dismissButton = { TextButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
+        dismissButton = { OutlineButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
 

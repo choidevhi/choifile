@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -23,7 +22,6 @@ import com.choidev.choifile.browser.OriginalAction
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,12 +41,12 @@ const val MAX_DUMMY_MB = 2048
 @Composable
 fun NameDialog(title: String, initial: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(initial) }
-    AlertDialog(
+    ChoiDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { OutlinedTextField(text, { text = it }, label = { Text(stringResource(R.string.name_label)) }, singleLine = true) },
-        confirmButton = { TextButton({ onConfirm(text) }, enabled = text.isNotBlank()) { Text(stringResource(R.string.ok)) } },
-        dismissButton = { TextButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
+        confirmButton = { PrimaryButton({ onConfirm(text) }, enabled = text.isNotBlank()) { Text(stringResource(R.string.ok)) } },
+        dismissButton = { OutlineButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
@@ -58,7 +56,7 @@ fun DummyDialog(onConfirm: (String, Int) -> Unit, onDismiss: () -> Unit) {
     var name by remember { mutableStateOf(defaultName) }
     var size by remember { mutableStateOf("10") }
     val mb = size.toIntOrNull()?.takeIf { it in 1..MAX_DUMMY_MB }
-    AlertDialog(
+    ChoiDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.dummy_title)) },
         text = {
@@ -75,15 +73,15 @@ fun DummyDialog(onConfirm: (String, Int) -> Unit, onDismiss: () -> Unit) {
                 )
             }
         },
-        confirmButton = { TextButton({ onConfirm(name, mb!!) }, enabled = mb != null && name.isNotBlank()) { Text(stringResource(R.string.create)) } },
-        dismissButton = { TextButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
+        confirmButton = { PrimaryButton({ onConfirm(name, mb!!) }, enabled = mb != null && name.isNotBlank()) { Text(stringResource(R.string.create)) } },
+        dismissButton = { OutlineButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
 
 @Composable
 fun TrashDialog(entries: List<TrashEntry>, onRestore: (TrashEntry) -> Unit, onEmpty: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
+    ChoiDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.trash)) },
         text = {
@@ -95,14 +93,14 @@ fun TrashDialog(entries: List<TrashEntry>, onRestore: (TrashEntry) -> Unit, onEm
                         ListItem(
                             headlineContent = { Text(e.name, maxLines = 1) },
                             supportingContent = { Text(e.origin, maxLines = 1) },
-                            trailingContent = { TextButton({ onRestore(e) }) { Text(stringResource(R.string.trash_restore)) } },
+                            trailingContent = { GhostButton({ onRestore(e) }) { Text(stringResource(R.string.trash_restore)) } },
                         )
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onDismiss) { Text(stringResource(R.string.close)) } },
-        dismissButton = { if (entries.isNotEmpty()) TextButton(onEmpty) { Text(stringResource(R.string.trash_empty_action)) } },
+        confirmButton = { PrimaryButton(onDismiss) { Text(stringResource(R.string.close)) } },
+        dismissButton = { if (entries.isNotEmpty()) GhostButton(onEmpty) { Text(stringResource(R.string.trash_empty_action)) } },
     )
 }
 
@@ -120,7 +118,7 @@ private fun RadioRow(selected: Boolean, label: String, onClick: () -> Unit) {
 @Composable
 fun DeleteDialog(count: Int, onConfirm: (DeleteMode) -> Unit, onDismiss: () -> Unit) {
     var mode by remember { mutableStateOf(DeleteMode.TRASH) }
-    AlertDialog(
+    ChoiDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.delete_title)) },
         text = {
@@ -140,8 +138,8 @@ fun DeleteDialog(count: Int, onConfirm: (DeleteMode) -> Unit, onDismiss: () -> U
                 }
             }
         },
-        confirmButton = { TextButton({ onConfirm(mode) }) { Text(stringResource(R.string.delete)) } },
-        dismissButton = { TextButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
+        confirmButton = { DestructiveButton({ onConfirm(mode) }) { Text(stringResource(R.string.delete)) } },
+        dismissButton = { OutlineButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
@@ -164,7 +162,7 @@ fun PasswordDialog(
     val tooShort = confirmTwice && pw.isNotEmpty() && pw.length < 8
     val mismatch = confirmTwice && pw2.isNotEmpty() && pw != pw2
     val valid = pw.isNotEmpty() && (!confirmTwice || (pw.length >= 8 && pw == pw2))
-    AlertDialog(
+    ChoiDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
@@ -200,8 +198,8 @@ fun PasswordDialog(
                 }
             }
         },
-        confirmButton = { TextButton({ onConfirm(pw.toCharArray(), option) }, enabled = valid) { Text(stringResource(R.string.ok)) } },
-        dismissButton = { TextButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
+        confirmButton = { PrimaryButton({ onConfirm(pw.toCharArray(), option) }, enabled = valid) { Text(stringResource(R.string.ok)) } },
+        dismissButton = { OutlineButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
@@ -209,7 +207,7 @@ fun PasswordDialog(
 fun ArchiveCreateDialog(suggested: String, onConfirm: (String, ArchiveFormat) -> Unit, onDismiss: () -> Unit) {
     var name by remember { mutableStateOf(com.choidev.choifile.archive.archiveBaseName(suggested)) }
     var format by remember { mutableStateOf(ArchiveFormat.ZIP) }
-    AlertDialog(
+    ChoiDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.compress)) },
         text = {
@@ -221,7 +219,7 @@ fun ArchiveCreateDialog(suggested: String, onConfirm: (String, ArchiveFormat) ->
                 Text(stringResource(R.string.archive_rar_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
-        confirmButton = { TextButton({ onConfirm(name, format) }, enabled = name.isNotBlank() && '/' !in name) { Text(stringResource(R.string.create)) } },
-        dismissButton = { TextButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
+        confirmButton = { PrimaryButton({ onConfirm(name, format) }, enabled = name.isNotBlank() && '/' !in name) { Text(stringResource(R.string.create)) } },
+        dismissButton = { OutlineButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }

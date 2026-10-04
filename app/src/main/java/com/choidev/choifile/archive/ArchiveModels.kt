@@ -12,7 +12,7 @@ enum class ArchiveFormat(val label: String) {
         fun detect(name: String): ArchiveFormat? {
             val n = name.lowercase()
             return when {
-                n.endsWith(".zip") || n.endsWith(".jar") -> ZIP
+                n.endsWith(".zip") || n.endsWith(".jar") || n.endsWith(".cbz") -> ZIP
                 n.endsWith(".7z") -> SEVEN_Z
                 n.endsWith(".tar.gz") || n.endsWith(".tgz") -> TAR_GZ
                 n.endsWith(".tar.bz2") || n.endsWith(".tbz2") || n.endsWith(".tbz") -> TAR_BZ2
@@ -57,7 +57,7 @@ class ArchiveCancelledException : ArchiveException("cancelled")
 /** "photos.tar.gz" -> "photos", "a.zip" -> "a". Names without an archive extension are returned unchanged. */
 fun archiveBaseName(name: String): String {
     val lower = name.lowercase()
-    val suffix = listOf(".tar.gz", ".tar.bz2", ".tar.xz", ".tgz", ".tbz2", ".tbz", ".txz", ".zip", ".jar", ".7z", ".tar", ".rar")
+    val suffix = listOf(".tar.gz", ".tar.bz2", ".tar.xz", ".tgz", ".tbz2", ".tbz", ".txz", ".zip", ".jar", ".cbz", ".7z", ".tar", ".rar")
         .firstOrNull { lower.endsWith(it) } ?: return name
     return name.dropLast(suffix.length).ifEmpty { name }
 }

@@ -24,6 +24,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import com.choidev.choifile.R
 
 @Composable
@@ -34,13 +36,19 @@ fun PermissionScreen(onRequestLegacy: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(Icons.Default.FolderOpen, null, Modifier.size(72.dp), tint = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(24.dp))
+        val c = ChoiTheme.colors
+        androidx.compose.foundation.layout.Box(
+            Modifier.size(64.dp)
+                .background(c.muted, androidx.compose.foundation.shape.RoundedCornerShape(Radius.xl))
+                .border(Hairline, c.border, androidx.compose.foundation.shape.RoundedCornerShape(Radius.xl)),
+            contentAlignment = Alignment.Center,
+        ) { Icon(Icons.Default.FolderOpen, null, Modifier.size(28.dp), tint = c.foreground) }
+        Spacer(Modifier.height(Space.xl))
         Text(stringResource(R.string.perm_title), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(12.dp))
-        Text(stringResource(R.string.perm_body), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(24.dp))
-        Button(onClick = {
+        Spacer(Modifier.height(Space.sm))
+        Text(stringResource(R.string.perm_body), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium, color = c.mutedForeground)
+        Spacer(Modifier.height(Space.xl))
+        PrimaryButton(onClick = {
             if (Build.VERSION.SDK_INT >= 30) {
                 val uri = Uri.parse("package:${context.packageName}")
                 runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, uri)) }

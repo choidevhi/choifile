@@ -4,6 +4,7 @@ import android.Manifest
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -28,11 +29,14 @@ import com.choidev.choifile.archive.ArchiveLocation
 import com.choidev.choifile.remote.RemoteLocation
 import com.choidev.choifile.search.IndexWorker
 import com.choidev.choifile.security.Authenticator
+import com.choidev.choifile.security.GracePeriod
 import com.choidev.choifile.storage.FileItem
+import com.choidev.choifile.ui.ComicScreen
 import com.choidev.choifile.ui.ConnectionsScreen
 import com.choidev.choifile.ui.HostKeyDialog
 import com.choidev.choifile.ui.AnalysisScreen
 import com.choidev.choifile.ui.DuplicatesScreen
+import com.choidev.choifile.ui.OpenWithSheet
 import com.choidev.choifile.ui.OperationsScreen
 import com.choidev.choifile.ui.RulesScreen
 import com.choidev.choifile.ui.ServerScreen
@@ -48,8 +52,11 @@ import com.choidev.choifile.ui.VaultScreen
 import com.choidev.choifile.ui.ViewerScreen
 import com.choidev.choifile.ui.rememberRequestAuth
 import com.choidev.choifile.util.FileKind
+import com.choidev.choifile.util.OpenChoice
+import com.choidev.choifile.util.extensionKey
 import com.choidev.choifile.util.hasAllFilesAccess
 import com.choidev.choifile.util.kindOf
+import com.choidev.choifile.util.launchWith
 import com.choidev.choifile.util.openWithOtherApp
 import java.io.File
 
@@ -59,23 +66,27 @@ private enum class Screen { BROWSER, SETTINGS, VAULT, SEARCH, CONNECTIONS, OPERA
 class MainActivity : FragmentActivity() {
     private val viewModel: BrowserViewModel by viewModels()
     private lateinit var authenticator: Authenticator
+    private val grace = GracePeriod(clock = SystemClock::elapsedRealtime)
 
     // Deliberately not saved across process death: these must never restore into an unlocked state.
     private var appLocked by mutableStateOf(false)
     private var screen by mutableStateOf(Screen.BROWSER)
     private var tempViewing by mutableStateOf<String?>(null)
-    private var stoppedAt = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         authenticator = Authenticator(this)
+        authenticator.onPromptActive = { grace.suspended = it }
+        grace.graceMs = viewModel.prefs.graceSeconds * 1000L
         appLocked = viewModel.prefs.appLock
         viewModel.viewCacheDir().deleteRecursively() // leftovers of decrypted copies after a crash or kill
         IndexWorker.schedule(this)
         enableEdgeToEdge()
         setContent {
             ChoiTheme {
-                CompositionLocalProvider(LocalAuthenticator provides authenticator) { Root() }
+                CompositionLocalProvider(LocalAuthenticator provides authenticator) {
+                    androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.background) { Root() }
+                }
             }
         }
     }
@@ -86,19 +97,46 @@ class MainActivity : FragmentActivity() {
         val requestAuth = rememberRequestAuth()
         var granted by remember { mutableStateOf(hasAllFilesAccess(context)) }
         var viewing by rememberSaveable { mutableStateOf<String?>(null) }
+        var comic by rememberSaveable { mutableStateOf<String?>(null) }
+        var openWith by rememberSaveable { mutableStateOf<String?>(null) }
         var appLockOn by remember { mutableStateOf(viewModel.prefs.appLock) }
         var relock by remember { mutableIntStateOf(viewModel.prefs.relockSeconds) }
+        var graceSec by remember { mutableIntStateOf(viewModel.prefs.graceSeconds) }
         val protectedPaths by viewModel.protectedPaths.collectAsStateWithLifecycle()
+        val associations by viewModel.associations.collectAsStateWithLifecycle()
         val hostKeyRequest by viewModel.hostKeyRequest.collectAsStateWithLifecycle()
 
-        // Local files open in the viewer or another app; archives open as folders; files on servers or inside archives open from a temporary copy.
-        val openFile: (FileItem) -> Unit = { item ->
-            val file = File(item.path)
+        fun isComicArchive(name: String) = extensionKey(name) == "cbz"
+        fun hasBuiltIn(name: String) = kindOf(File(name)) != FileKind.OTHER || ArchiveFormat.detect(name) != null
+
+        // choifile's own way of opening a local file: viewer, comic reader for .cbz, folder view for archives.
+        fun openBuiltIn(path: String) {
+            val name = File(path).name
             when {
-                ArchiveLocation.isArchive(item.path) || RemoteLocation.isRemote(item.path) -> viewModel.openVirtualFile(item)
-                ArchiveFormat.detect(item.name) != null -> viewModel.openDir(ArchiveLocation.make(item.path))
-                kindOf(file) == FileKind.OTHER -> openWithOtherApp(context, file)
-                else -> viewing = item.path
+                isComicArchive(name) -> comic = path
+                ArchiveFormat.detect(name) != null -> viewModel.openDir(ArchiveLocation.make(path))
+                else -> viewing = path
+            }
+        }
+
+        // Local files follow the remembered default for their extension (Settings > 파일 연결); files on servers
+        // or inside archives open from a temporary copy in the built-in viewer.
+        val openFile: (FileItem) -> Unit = { item ->
+            if (ArchiveLocation.isArchive(item.path) || RemoteLocation.isRemote(item.path)) {
+                viewModel.openVirtualFile(item)
+            } else {
+                val builtIn = hasBuiltIn(item.name)
+                when (val choice = viewModel.associationFor(item.name)) {
+                    OpenChoice.BuiltIn -> if (builtIn) openBuiltIn(item.path) else openWith = item.path
+                    OpenChoice.Ask -> openWith = item.path
+                    is OpenChoice.App -> if (!launchWith(context, File(item.path), choice.packageName, choice.activity)) {
+                        // The app is gone or no longer takes this file: forget the default and ask again.
+                        viewModel.clearAssociation(extensionKey(item.name))
+                        Toast.makeText(context, R.string.ow_app_missing, Toast.LENGTH_SHORT).show()
+                        openWith = item.path
+                    }
+                    null -> if (builtIn) openBuiltIn(item.path) else openWith = item.path
+                }
             }
             if (screen != Screen.BROWSER) screen = Screen.BROWSER
         }
@@ -117,15 +155,17 @@ class MainActivity : FragmentActivity() {
 
         val temp = tempViewing
         val view = viewing
+        val comicPath = comic
         when {
             appLocked -> LockedView(R.string.auth_subtitle_app) {
-                requestAuth(R.string.auth_subtitle_app, false) { appLocked = false }
+                requestAuth(R.string.auth_subtitle_app, false) { appLocked = false; grace.reset() }
             }
             !granted -> PermissionScreen {
                 legacyLauncher.launch(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE))
             }
             temp != null -> ViewerScreen(File(temp), temporary = true) { closeTemp() }
-            view != null && !viewModel.isLocked(view) -> ViewerScreen(File(view)) { viewing = null }
+            view != null && !viewModel.isLocked(view) -> ViewerScreen(File(view), onOpenWith = { openWith = it.path }) { viewing = null }
+            comicPath != null && !viewModel.isLocked(comicPath) -> ComicScreen(comicPath) { comic = null }
             screen == Screen.SETTINGS -> SettingsScreen(
                 appLock = appLockOn,
                 onAppLock = { on ->
@@ -135,11 +175,21 @@ class MainActivity : FragmentActivity() {
                         appLockOn = on
                     }
                 },
+                graceSeconds = graceSec,
+                onGrace = { s ->
+                    graceSec = s
+                    viewModel.prefs.graceSeconds = s
+                    grace.graceMs = s * 1000L
+                },
                 relockSeconds = relock,
                 onRelock = { relock = it; viewModel.setRelockSeconds(it) },
                 protectedPaths = protectedPaths,
                 rootPath = viewModel.rootPath,
                 onUnprotect = { p -> requestAuth(R.string.auth_subtitle_change, false) { viewModel.setProtected(p, false) } },
+                associations = associations,
+                onClearAssociation = viewModel::clearAssociation,
+                onClearAllAssociations = viewModel::clearAllAssociations,
+                onClearCache = { viewModel.clearCache() },
                 onBack = { screen = Screen.BROWSER },
             )
             screen == Screen.VAULT -> VaultScreen(viewModel) { screen = Screen.BROWSER }
@@ -163,6 +213,8 @@ class MainActivity : FragmentActivity() {
                 onOpenSettings = { screen = Screen.SETTINGS },
                 onOpenSearch = { screen = Screen.SEARCH },
                 onOpenConnections = { screen = Screen.CONNECTIONS },
+                onOpenComic = { comic = it },
+                onOpenWith = { openWith = it },
                 onOpenTool = { screen = when (it) {
                     ToolScreen.OPERATIONS -> Screen.OPERATIONS
                     ToolScreen.ANALYSIS -> Screen.ANALYSIS
@@ -170,6 +222,39 @@ class MainActivity : FragmentActivity() {
                     ToolScreen.RULES -> Screen.RULES
                     ToolScreen.SERVER -> Screen.SERVER
                 } },
+            )
+        }
+
+        // "Open with" sheet, above whatever screen asked for it.
+        val owPath = openWith
+        if (owPath != null && !appLocked) {
+            val f = File(owPath)
+            val ext = extensionKey(f.name)
+            OpenWithSheet(
+                file = f,
+                builtInLabel = when {
+                    isComicArchive(f.name) -> R.string.ow_builtin_comic
+                    ArchiveFormat.detect(f.name) != null -> R.string.ow_builtin_archive
+                    kindOf(f) != FileKind.OTHER -> R.string.ow_builtin
+                    else -> null
+                },
+                current = viewModel.associationFor(f.name),
+                onBuiltIn = { remember ->
+                    if (remember && ext.isNotEmpty()) viewModel.setAssociation(ext, OpenChoice.BuiltIn)
+                    openWith = null
+                    if (viewing != owPath) openBuiltIn(owPath)
+                },
+                onApp = { app, remember ->
+                    if (remember && ext.isNotEmpty()) viewModel.setAssociation(ext, OpenChoice.App(app.packageName, app.activity, app.label))
+                    openWith = null
+                    if (!launchWith(context, f, app.packageName, app.activity)) Toast.makeText(context, R.string.msg_no_app, Toast.LENGTH_SHORT).show()
+                },
+                onAlwaysAsk = {
+                    viewModel.setAssociation(ext, OpenChoice.Ask)
+                    Toast.makeText(context, context.getString(R.string.ow_set_ask, ext), Toast.LENGTH_SHORT).show()
+                },
+                onSystemChooser = { openWith = null; openWithOtherApp(context, f) },
+                onDismiss = { openWith = null },
             )
         }
 
@@ -184,26 +269,22 @@ class MainActivity : FragmentActivity() {
 
     override fun onStart() {
         super.onStart()
-        // Short grace period so the share sheet or a permission screen does not force a re-prompt.
-        if (stoppedAt != 0L && viewModel.prefs.appLock && SystemClock.elapsedRealtime() - stoppedAt > APP_LOCK_GRACE_MS) {
-            appLocked = true
-        }
+        // Within the grace period (settings) the user comes back without authenticating again; this covers the
+        // share sheet, "open with" and quick app switches. Our own PIN screen is excluded (see Authenticator).
+        val expired = grace.onForeground()
+        if (expired && viewModel.prefs.appLock) appLocked = true
+        if (expired && screen == Screen.VAULT) screen = Screen.BROWSER // the hidden list needs a fresh authentication
+        viewModel.onForeground(expired)
     }
 
     override fun onStop() {
         super.onStop()
-        stoppedAt = SystemClock.elapsedRealtime()
-        viewModel.onBackground()
-        if (screen == Screen.VAULT) screen = Screen.BROWSER // the hidden list always needs a fresh authentication
-        if (tempViewing != null) closeTemp()                 // decrypted copies never outlive the foreground
+        grace.onBackground()
+        if (tempViewing != null) closeTemp() // decrypted copies never outlive the foreground, grace or not
     }
 
     override fun onDestroy() {
         super.onDestroy()
         if (isFinishing) viewModel.viewCacheDir().deleteRecursively()
-    }
-
-    private companion object {
-        const val APP_LOCK_GRACE_MS = 10_000L
     }
 }

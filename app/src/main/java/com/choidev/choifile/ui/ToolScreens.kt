@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,7 +37,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -109,7 +107,7 @@ fun OperationsScreen(vm: BrowserViewModel, onBack: () -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            ChoiTopBar(
                 title = { Text(stringResource(R.string.ops_title)) },
                 navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 actions = { IconButton({ confirmClear = true }, enabled = records.isNotEmpty()) { Icon(Icons.Default.DeleteSweep, stringResource(R.string.ops_clear)) } },
@@ -125,7 +123,7 @@ fun OperationsScreen(vm: BrowserViewModel, onBack: () -> Unit) {
                         Text(t.currentName.ifEmpty { stringResource(R.string.transfer_working) }, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (t.bytesTotal > 0) LinearProgressIndicator(progress = { t.fraction }, Modifier.fillMaxWidth().padding(vertical = 4.dp))
                         else LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 4.dp))
-                        TextButton(vm::cancelTransfer) { Text(stringResource(R.string.cancel)) }
+                        GhostButton(vm::cancelTransfer) { Text(stringResource(R.string.cancel)) }
                     }
                     HorizontalDivider()
                 }
@@ -142,12 +140,12 @@ fun OperationsScreen(vm: BrowserViewModel, onBack: () -> Unit) {
     }
 
     if (confirmClear) {
-        AlertDialog(
+        ChoiDialog(
             onDismissRequest = { confirmClear = false },
             title = { Text(stringResource(R.string.ops_clear)) },
             text = { Text(stringResource(R.string.ops_clear_message)) },
-            confirmButton = { TextButton({ vm.clearOperationLog(); confirmClear = false }) { Text(stringResource(R.string.ops_clear_action)) } },
-            dismissButton = { TextButton({ confirmClear = false }) { Text(stringResource(R.string.cancel)) } },
+            confirmButton = { DestructiveButton({ vm.clearOperationLog(); confirmClear = false }) { Text(stringResource(R.string.ops_clear_action)) } },
+            dismissButton = { OutlineButton({ confirmClear = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }
@@ -171,7 +169,7 @@ private fun OperationRow(r: OpRecord, time: String, onUndo: () -> Unit) {
                 if (status != null) Text(status, color = if (r.undoState == UndoState.UNAVAILABLE) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
         },
-        trailingContent = { if (r.undoState == UndoState.AVAILABLE) TextButton(onUndo) { Text(stringResource(R.string.op_undo)) } },
+        trailingContent = { if (r.undoState == UndoState.AVAILABLE) GhostButton(onUndo) { Text(stringResource(R.string.op_undo)) } },
     )
 }
 
@@ -199,7 +197,7 @@ fun AnalysisScreen(vm: BrowserViewModel, onOpenFolder: (String) -> Unit, onBack:
     BackHandler { if (tab == AnalysisTab.FOLDERS && stack.size > 1) stack = stack.dropLast(1) else onBack() }
 
     Scaffold(topBar = {
-        TopAppBar(
+        ChoiTopBar(
             title = { Text(stringResource(R.string.analysis_title)) },
             navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
             actions = { IconButton({ vm.analysis.start() }, enabled = !state.scanning) { Icon(Icons.Default.Refresh, stringResource(R.string.analysis_rescan)) } },
@@ -210,7 +208,7 @@ fun AnalysisScreen(vm: BrowserViewModel, onOpenFolder: (String) -> Unit, onBack:
                 Column(Modifier.padding(16.dp)) {
                     Text(stringResource(R.string.analysis_scanning, state.filesSeen))
                     LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 8.dp))
-                    TextButton({ vm.analysis.cancel() }) { Text(stringResource(R.string.cancel)) }
+                    GhostButton({ vm.analysis.cancel() }) { Text(stringResource(R.string.cancel)) }
                 }
             }
             state.error?.let { Text(it, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error) }
@@ -350,7 +348,7 @@ fun DuplicatesScreen(vm: BrowserViewModel, onBack: () -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            ChoiTopBar(
                 title = { Text(stringResource(R.string.dup_title)) },
                 navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
             )
@@ -360,7 +358,7 @@ fun DuplicatesScreen(vm: BrowserViewModel, onBack: () -> Unit) {
             if (groups != null && groups.isNotEmpty()) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.dup_pending, pending.size, Formatter.formatShortFileSize(context, pendingBytes)), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                    Button({ confirm = true }, enabled = pending.isNotEmpty()) { Text(stringResource(R.string.dup_trash_selected)) }
+                    PrimaryButton({ confirm = true }, enabled = pending.isNotEmpty()) { Text(stringResource(R.string.dup_trash_selected)) }
                 }
             }
         },
@@ -372,16 +370,16 @@ fun DuplicatesScreen(vm: BrowserViewModel, onBack: () -> Unit) {
                     if (state.total > 0) LinearProgressIndicator(progress = { state.done.toFloat() / state.total }, Modifier.fillMaxWidth().padding(vertical = 8.dp))
                     else LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 8.dp))
                     if (state.total > 0) Text("${state.done} / ${state.total}", style = MaterialTheme.typography.bodySmall)
-                    TextButton({ vm.duplicates.cancel() }) { Text(stringResource(R.string.cancel)) }
+                    GhostButton({ vm.duplicates.cancel() }) { Text(stringResource(R.string.cancel)) }
                 }
                 groups == null -> Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(stringResource(R.string.dup_intro))
                     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                    Button({ vm.duplicates.start() }) { Text(stringResource(R.string.dup_scan)) }
+                    PrimaryButton({ vm.duplicates.start() }) { Text(stringResource(R.string.dup_scan)) }
                 }
                 groups.isEmpty() -> Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(stringResource(R.string.dup_none))
-                    OutlinedButton({ vm.duplicates.start() }) { Text(stringResource(R.string.dup_scan_again)) }
+                    OutlineButton({ vm.duplicates.start() }) { Text(stringResource(R.string.dup_scan_again)) }
                 }
                 else -> LazyColumn(Modifier.fillMaxSize()) {
                     item {
@@ -394,7 +392,7 @@ fun DuplicatesScreen(vm: BrowserViewModel, onBack: () -> Unit) {
                                     Text(File(g.files[0].path).name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Text(stringResource(R.string.dup_group_meta, g.files.size, Formatter.formatShortFileSize(context, g.size), Formatter.formatShortFileSize(context, g.wasted)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                TextButton({ vm.duplicates.resetGroup(g) }) { Text(stringResource(R.string.dup_reset)) }
+                                GhostButton({ vm.duplicates.resetGroup(g) }) { Text(stringResource(R.string.dup_reset)) }
                             }
                         }
                         items(g.files, key = { g.hash + it.path }) { f ->
@@ -414,12 +412,12 @@ fun DuplicatesScreen(vm: BrowserViewModel, onBack: () -> Unit) {
     }
 
     if (confirm) {
-        AlertDialog(
+        ChoiDialog(
             onDismissRequest = { confirm = false },
             title = { Text(stringResource(R.string.dup_confirm_title)) },
             text = { Text(stringResource(R.string.dup_confirm_message, pending.size, Formatter.formatShortFileSize(context, pendingBytes))) },
-            confirmButton = { TextButton({ vm.deleteDuplicates(); confirm = false }) { Text(stringResource(R.string.dup_trash_selected)) } },
-            dismissButton = { TextButton({ confirm = false }) { Text(stringResource(R.string.cancel)) } },
+            confirmButton = { DestructiveButton({ vm.deleteDuplicates(); confirm = false }) { Text(stringResource(R.string.dup_trash_selected)) } },
+            dismissButton = { OutlineButton({ confirm = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }

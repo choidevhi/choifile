@@ -62,8 +62,11 @@ import com.choidev.choifile.storage.FileItem
 import com.choidev.choifile.storage.FileStore
 import com.choidev.choifile.storage.LocalFileStore
 import com.choidev.choifile.storage.SortKey
+import com.choidev.choifile.storage.ScrollPos
 import com.choidev.choifile.storage.TrashEntry
 import com.choidev.choifile.storage.sortItems
+import com.choidev.choifile.util.Associations
+import com.choidev.choifile.util.OpenChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
@@ -100,6 +103,9 @@ sealed interface ConnectionTest {
 }
 
 data class Tab(val id: Int, val path: String, val grid: Boolean = false)
+
+/** Items of one folder. [path] tells which folder, so a stale listing is never shown for another one. */
+data class Listing(val path: String, val items: List<FileItem>, val error: Boolean = false, val locked: Boolean = false)
 
 data class Clipboard(val paths: List<String>, val move: Boolean)
 
@@ -219,27 +225,111 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
 
     private data class Query(val path: String, val sort: SortKey, val ascending: Boolean, val hidden: Boolean)
 
+    /** The open tab's listing, tagged with the folder it belongs to (null until the first listing arrives). */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val entries: StateFlow<List<FileItem>> = combine(
+    val listing: StateFlow<Listing?> = combine(
         _state.map { Query(it.tab.path, it.sort, it.ascending, it.showHidden) }.distinctUntilChanged(),
         refresh,
         lockedRoot,
     ) { query, _, locked -> query to locked }
         .mapLatest { (q, locked) ->
-            if (locked != null) return@mapLatest emptyList()
+            if (locked != null) return@mapLatest Listing(q.path, emptyList())
             try {
                 val items = listLocation(q.path).filter { q.hidden || !it.isHidden }
                 _listError.value = null
-                sortItems(items, q.sort, q.ascending)
+                Listing(q.path, sortItems(items, q.sort, q.ascending))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
                 _listError.value = describeError(e)
-                emptyList()
+                Listing(q.path, emptyList(), error = true)
             }
         }
         .flowOn(Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Items of the open tab (empty while its listing is loading). */
+    val entries: StateFlow<List<FileItem>> = combine(listing, _state.map { it.tab.path }.distinctUntilChanged()) { l, path ->
+        l?.takeIf { it.path == path }?.items.orEmpty()
+    }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Listing for a tab that is not the open one (the neighbour pages while swiping between tabs).
+     * Locked protected folders are never listed; errors show as an empty page.
+     */
+    suspend fun peek(path: String): Listing = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        if (protection.lockedRoot(physicalPath(path)) != null) return@withContext Listing(path, emptyList(), locked = true)
+        val s = _state.value
+        try {
+            Listing(path, sortItems(listLocation(path).filter { s.showHidden || !it.isHidden }, s.sort, s.ascending))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Listing(path, emptyList(), error = true)
+        }
+    }
+
+    // ---- remembered scroll positions (per folder, persisted) ----
+
+    private val scrollStore = AppStores.scrollPositions(app)
+
+    fun scrollPosition(path: String): ScrollPos? = scrollStore.get(path)
+
+    fun saveScrollPosition(path: String, pos: ScrollPos) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (pos.index == 0 && pos.offset == 0) scrollStore.remove(path) else scrollStore.put(path, pos)
+        }
+    }
+
+    // ---- "open with" defaults ----
+
+    private val associationStore = Associations.decode(prefs.associations)
+    private val _associations = MutableStateFlow(associationStore.all())
+    val associations: StateFlow<List<Pair<String, OpenChoice>>> = _associations
+
+    fun associationFor(name: String): OpenChoice? = associationStore.get(name)
+
+    fun setAssociation(extension: String, choice: OpenChoice) {
+        associationStore.set(extension, choice)
+        persistAssociations()
+    }
+
+    fun clearAssociation(extension: String) {
+        associationStore.clear(extension)
+        persistAssociations()
+    }
+
+    fun clearAllAssociations() {
+        associationStore.clearAll()
+        persistAssociations()
+    }
+
+    private fun persistAssociations() {
+        prefs.associations = associationStore.encode()
+        _associations.value = associationStore.all()
+    }
+
+    // ---- cache ----
+
+    /**
+     * Settings > "캐시 삭제": temporary copies, extracted comic pages, image thumbnails and the comic reading
+     * positions. Returns the bytes freed (files only; the reading positions are tiny).
+     */
+    suspend fun clearCache(): Long = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        val app = getApplication<Application>()
+        val cache = app.cacheDir
+        val before = cache.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
+        runCatching {
+            val loader = coil3.SingletonImageLoader.get(app)
+            loader.memoryCache?.clear()
+            loader.diskCache?.clear()
+        }
+        cache.listFiles()?.forEach { f -> if (f.name != "image_cache") f.deleteRecursively() }
+        AppStores.readingPositions(app).clear()
+        val after = cache.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
+        (before - after).coerceAtLeast(0)
+    }
 
     init {
         opLog.addListener(opListener)
@@ -562,9 +652,13 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
         lockTick.update { it + 1 }
     }
 
-    /** Called when the app goes to the background. */
-    fun onBackground() {
-        if (protection.timeoutMs == 0L) protection.lockAll()
+    /**
+     * Called when the app comes back to the foreground. [graceExpired] = it was away at least the grace period
+     * (settings). The "immediate" relock then locks every protected folder again; a short trip to another app
+     * (share sheet, "open with") within the grace period keeps them open. Timed unlocks expire on their own clock.
+     */
+    fun onForeground(graceExpired: Boolean) {
+        if (graceExpired && protection.timeoutMs == 0L) protection.lockAll()
         lockTick.update { it + 1 }
     }
 

@@ -23,8 +23,7 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -40,7 +39,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -82,14 +80,14 @@ fun ConnectionsScreen(vm: BrowserViewModel, onOpened: () -> Unit, onBack: () -> 
     LaunchedEffect(Unit) { vm.loadConnections() }
 
     Scaffold(topBar = {
-        TopAppBar(
+        ChoiTopBar(
             title = { Text(stringResource(R.string.connections)) },
             navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
             actions = {
                 IconButton({ editing = newConnection() }) { Icon(Icons.Default.Add, stringResource(R.string.conn_add)) }
                 Box {
                     IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.more)) }
-                    DropdownMenu(menu, { menu = false }) {
+                    ChoiMenu(menu, { menu = false }) {
                         DropdownMenuItem({ Text(stringResource(R.string.ts_preset)) }, { menu = false; preset = true })
                         DropdownMenuItem({ Text(stringResource(R.string.ts_api_key_title)) }, { menu = false; apiKeyDialog = true })
                     }
@@ -99,7 +97,7 @@ fun ConnectionsScreen(vm: BrowserViewModel, onOpened: () -> Unit, onBack: () -> 
     }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {
             item {
-                Card(Modifier.padding(16.dp)) {
+                OutlinedCard(Modifier.padding(16.dp)) {
                     Text(stringResource(R.string.conn_honesty), Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall)
                 }
                 vaultError?.let { Text(stringResource(R.string.conn_vault_error, it), Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.error) }
@@ -134,12 +132,12 @@ fun ConnectionsScreen(vm: BrowserViewModel, onOpened: () -> Unit, onBack: () -> 
     }
     if (apiKeyDialog) TailscaleKeyDialog(vm) { apiKeyDialog = false }
     deleting?.let { c ->
-        AlertDialog(
+        ChoiDialog(
             onDismissRequest = { deleting = null },
             title = { Text(stringResource(R.string.conn_delete_title, c.name)) },
             text = { Text(stringResource(R.string.conn_delete_msg)) },
-            confirmButton = { TextButton({ vm.deleteConnection(c.id); deleting = null }) { Text(stringResource(R.string.delete)) } },
-            dismissButton = { TextButton({ deleting = null }) { Text(stringResource(R.string.cancel)) } },
+            confirmButton = { DestructiveButton({ vm.deleteConnection(c.id); deleting = null }) { Text(stringResource(R.string.delete)) } },
+            dismissButton = { OutlineButton({ deleting = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }
@@ -162,7 +160,7 @@ private fun ConnectionEditor(vm: BrowserViewModel, initial: ConnectionConfig, is
         if (portText.toIntOrNull() == oldDefault) portText = defaultPortFor(p, tls).toString()
     }
 
-    AlertDialog(
+    ChoiDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(if (isNew) R.string.conn_add else R.string.conn_edit)) },
         text = {
@@ -208,11 +206,11 @@ private fun ConnectionEditor(vm: BrowserViewModel, initial: ConnectionConfig, is
                 }
             }
         },
-        confirmButton = { TextButton({ onSave(built()) }, enabled = valid) { Text(stringResource(R.string.save)) } },
+        confirmButton = { PrimaryButton({ onSave(built()) }, enabled = valid) { Text(stringResource(R.string.save)) } },
         dismissButton = {
             Row {
-                TextButton({ vm.testConnection(built()) }, enabled = valid && test != ConnectionTest.Running) { Text(stringResource(R.string.conn_test)) }
-                TextButton(onDismiss) { Text(stringResource(R.string.cancel)) }
+                GhostButton({ vm.testConnection(built()) }, enabled = valid && test != ConnectionTest.Running) { Text(stringResource(R.string.conn_test)) }
+                GhostButton(onDismiss) { Text(stringResource(R.string.cancel)) }
             }
         },
     )
@@ -244,17 +242,17 @@ private fun TailscalePreset(vm: BrowserViewModel, onDismiss: () -> Unit, onNext:
     val port = when (protocol) { Protocol.WEBDAV -> 443; else -> protocol.defaultPort }
     DisposableEffect(Unit) { onDispose { vm.clearReach() } }
 
-    AlertDialog(
+    ChoiDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.ts_preset)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Card { Text(stringResource(R.string.ts_explain), Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall) }
+                OutlinedCard { Text(stringResource(R.string.ts_explain), Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall) }
                 Field(host, { host = it }, R.string.ts_host, keyboard = KeyboardType.Uri)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(Protocol.SFTP, Protocol.SMB, Protocol.WEBDAV).forEach { p -> FilterChip(protocol == p, { protocol = p }, { Text(p.label) }) }
                 }
-                OutlinedButton({ vm.checkReachable(host.trim(), port) }, enabled = host.isNotBlank()) { Text(stringResource(R.string.ts_check, port)) }
+                OutlineButton({ vm.checkReachable(host.trim(), port) }, enabled = host.isNotBlank()) { Text(stringResource(R.string.ts_check, port)) }
                 when (val r = reach) {
                     is Tailscale.Reach.Ok -> Text(stringResource(R.string.ts_reach_ok, r.millis), color = MaterialTheme.colorScheme.primary)
                     is Tailscale.Reach.Failed -> Text(stringResource(R.string.ts_reach_failed, r.reason), color = MaterialTheme.colorScheme.error)
@@ -262,7 +260,7 @@ private fun TailscalePreset(vm: BrowserViewModel, onDismiss: () -> Unit, onNext:
                 }
                 if (keySet) {
                     HorizontalDivider()
-                    OutlinedButton(vm::loadTailscaleDevices) { Text(stringResource(R.string.ts_list_devices)) }
+                    OutlineButton(vm::loadTailscaleDevices) { Text(stringResource(R.string.ts_list_devices)) }
                     status?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                     devices?.forEach { d ->
                         Text(
@@ -275,7 +273,7 @@ private fun TailscalePreset(vm: BrowserViewModel, onDismiss: () -> Unit, onNext:
             }
         },
         confirmButton = {
-            TextButton({
+            GhostButton({
                 onNext(
                     ConnectionConfig(
                         UUID.randomUUID().toString(), host.trim().substringBefore('.'), protocol, host.trim(), port,
@@ -285,7 +283,7 @@ private fun TailscalePreset(vm: BrowserViewModel, onDismiss: () -> Unit, onNext:
                 )
             }, enabled = host.isNotBlank()) { Text(stringResource(R.string.ts_next)) }
         },
-        dismissButton = { TextButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
+        dismissButton = { OutlineButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
@@ -293,7 +291,7 @@ private fun TailscalePreset(vm: BrowserViewModel, onDismiss: () -> Unit, onNext:
 private fun TailscaleKeyDialog(vm: BrowserViewModel, onDismiss: () -> Unit) {
     val keySet by vm.tailscaleKeySet.collectAsStateWithLifecycle()
     var key by remember { mutableStateOf("") }
-    AlertDialog(
+    ChoiDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.ts_api_key_title)) },
         text = {
@@ -304,11 +302,11 @@ private fun TailscaleKeyDialog(vm: BrowserViewModel, onDismiss: () -> Unit) {
                 Spacer(Modifier.height(0.dp))
             }
         },
-        confirmButton = { TextButton({ vm.setTailscaleApiKey(key); onDismiss() }, enabled = key.isNotBlank()) { Text(stringResource(R.string.save)) } },
+        confirmButton = { PrimaryButton({ vm.setTailscaleApiKey(key); onDismiss() }, enabled = key.isNotBlank()) { Text(stringResource(R.string.save)) } },
         dismissButton = {
             Row {
-                if (keySet) TextButton({ vm.setTailscaleApiKey(""); onDismiss() }) { Text(stringResource(R.string.ts_key_remove)) }
-                TextButton(onDismiss) { Text(stringResource(R.string.cancel)) }
+                if (keySet) GhostButton({ vm.setTailscaleApiKey(""); onDismiss() }) { Text(stringResource(R.string.ts_key_remove)) }
+                GhostButton(onDismiss) { Text(stringResource(R.string.cancel)) }
             }
         },
     )
@@ -318,7 +316,7 @@ private fun TailscaleKeyDialog(vm: BrowserViewModel, onDismiss: () -> Unit) {
 @Composable
 fun HostKeyDialog(req: HostKeyRequest) {
     val changed = req.previous != null
-    AlertDialog(
+    ChoiDialog(
         onDismissRequest = {},
         title = { Text(stringResource(if (changed) R.string.hk_title_changed else R.string.hk_title_new), color = if (changed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface) },
         text = {
@@ -335,7 +333,7 @@ fun HostKeyDialog(req: HostKeyRequest) {
                 Text(req.fingerprint, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
             }
         },
-        confirmButton = { TextButton({ req.reply(HostKeyDecision.TRUST) }) { Text(stringResource(if (changed) R.string.hk_trust_anyway else R.string.hk_trust)) } },
-        dismissButton = { TextButton({ req.reply(HostKeyDecision.REJECT) }) { Text(stringResource(R.string.hk_reject)) } },
+        confirmButton = { PrimaryButton({ req.reply(HostKeyDecision.TRUST) }) { Text(stringResource(if (changed) R.string.hk_trust_anyway else R.string.hk_trust)) } },
+        dismissButton = { OutlineButton({ req.reply(HostKeyDecision.REJECT) }) { Text(stringResource(R.string.hk_reject)) } },
     )
 }

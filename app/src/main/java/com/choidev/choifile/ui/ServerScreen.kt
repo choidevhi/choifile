@@ -18,8 +18,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -30,7 +29,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -92,7 +90,7 @@ fun ServerScreen(vm: BrowserViewModel, onBack: () -> Unit) {
     }
 
     Scaffold(topBar = {
-        TopAppBar(
+        ChoiTopBar(
             title = { Text(stringResource(R.string.srv_title)) },
             navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
         )
@@ -101,7 +99,7 @@ fun ServerScreen(vm: BrowserViewModel, onBack: () -> Unit) {
             Text(stringResource(R.string.srv_intro), style = MaterialTheme.typography.bodyMedium)
 
             val anyRunning = http.running || ftp.running
-            OutlinedButton({ pickFolder = true }, Modifier.fillMaxWidth(), enabled = !anyRunning) {
+            OutlineButton({ pickFolder = true }, Modifier.fillMaxWidth(), enabled = !anyRunning) {
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.srv_folder), style = MaterialTheme.typography.labelSmall)
                     Text(root.removePrefix(vm.rootPath).ifEmpty { "/" }, maxLines = 1, overflow = TextOverflow.StartEllipsis)
@@ -125,12 +123,12 @@ fun ServerScreen(vm: BrowserViewModel, onBack: () -> Unit) {
     if (pickFolder) FolderPickerDialog(vm.rootPath, root, onPick = { root = it; pickFolder = false }, onDismiss = { pickFolder = false })
 
     warn?.let { kind ->
-        AlertDialog(
+        ChoiDialog(
             onDismissRequest = { warn = null },
             title = { Text(stringResource(R.string.srv_warn_title)) },
             text = { Text(stringResource(if (kind == ServerKind.HTTP) R.string.srv_warn_http else R.string.srv_warn_ftp)) },
-            confirmButton = { TextButton({ warn = null; requestStart(kind) }) { Text(stringResource(R.string.srv_start)) } },
-            dismissButton = { TextButton({ warn = null }) { Text(stringResource(R.string.cancel)) } },
+            confirmButton = { PrimaryButton({ warn = null; requestStart(kind) }) { Text(stringResource(R.string.srv_start)) } },
+            dismissButton = { OutlineButton({ warn = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }
@@ -141,7 +139,7 @@ private fun ServerCard(
     status: com.choidev.choifile.server.ServerStatus, upload: Boolean, onSwitch: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
-    Card(Modifier.fillMaxWidth()) {
+    OutlinedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
@@ -166,10 +164,10 @@ private fun ServerCard(
                 Text(stringResource(if (kind == ServerKind.HTTP) R.string.srv_token_label_http else R.string.srv_token_label_ftp), style = MaterialTheme.typography.labelMedium)
                 SelectionContainer { Text(status.token, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.titleMedium) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton({ copyText(context, status.token) }) { Text(stringResource(R.string.srv_copy_token)) }
+                    OutlineButton({ copyText(context, status.token) }) { Text(stringResource(R.string.srv_copy_token)) }
                     val first = addresses.firstOrNull()?.first
                     if (kind == ServerKind.HTTP && first != null) {
-                        OutlinedButton({ copyText(context, "http://$first:${status.port}/?token=${status.token}") }) { Text(stringResource(R.string.srv_copy_link)) }
+                        OutlineButton({ copyText(context, "http://$first:${status.port}/?token=${status.token}") }) { Text(stringResource(R.string.srv_copy_link)) }
                     }
                 }
                 Text(stringResource(if (status.allowUpload) R.string.srv_upload_on else R.string.srv_upload_off), style = MaterialTheme.typography.bodySmall)

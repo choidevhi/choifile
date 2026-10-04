@@ -11,13 +11,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,7 +42,7 @@ fun FolderPickerDialog(rootPath: String, start: String, onPick: (String) -> Unit
             File(current).listFiles().orEmpty().filter { it.isDirectory && it.name !in APP_PRIVATE_FOLDERS }.sortedBy { it.name.lowercase() }
         }
     }
-    AlertDialog(
+    ChoiDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.folder_pick_title)) },
         text = {
@@ -67,7 +65,7 @@ fun FolderPickerDialog(rootPath: String, start: String, onPick: (String) -> Unit
                 }
             }
         },
-        confirmButton = { TextButton({ onPick(current) }) { Text(stringResource(R.string.folder_pick_here)) } },
-        dismissButton = { TextButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
+        confirmButton = { PrimaryButton({ onPick(current) }) { Text(stringResource(R.string.folder_pick_here)) } },
+        dismissButton = { OutlineButton(onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }

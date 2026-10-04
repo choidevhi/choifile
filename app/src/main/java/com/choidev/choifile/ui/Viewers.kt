@@ -1,15 +1,20 @@
 package com.choidev.choifile.ui
 
-import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -21,31 +26,28 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -56,15 +58,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.graphics.SolidColor
-import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
 import com.choidev.choifile.R
 import com.choidev.choifile.util.FileKind
 import com.choidev.choifile.util.HighlightTransformation
+import com.choidev.choifile.util.NaturalOrder
 import com.choidev.choifile.util.codeExt
 import com.choidev.choifile.util.extensionLower
 import com.choidev.choifile.util.kindOf
@@ -75,12 +74,18 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 private const val MAX_TEXT_BYTES = 1_000_000L
+private const val MAX_ZOOM = 8f
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Full-screen viewer. Images get a swipeable pager over the other images of the same folder (natural name order);
+ * the title, share and "open with" always follow the image on screen. [onOpenWith] shows choifile's own
+ * app picker; without it the system chooser is used.
+ */
 @Composable
-fun ViewerScreen(file: File, temporary: Boolean = false, onClose: () -> Unit) {
+fun ViewerScreen(file: File, temporary: Boolean = false, onOpenWith: ((File) -> Unit)? = null, onClose: () -> Unit) {
     val context = LocalContext.current
     val kind = kindOf(file)
+    var shown by remember(file) { mutableStateOf(file) }
     var dirty by remember { mutableStateOf(false) }
     var saveRequest by remember { mutableIntStateOf(0) }
     var confirmDiscard by remember { mutableStateOf(false) }
@@ -91,33 +96,34 @@ fun ViewerScreen(file: File, temporary: Boolean = false, onClose: () -> Unit) {
     fun close() = if (dirty) confirmDiscard = true else onClose()
     BackHandler(onBack = ::close)
 
+    val media = kind == FileKind.IMAGE || kind == FileKind.VIDEO
     Scaffold(
+        containerColor = if (media) Color.Black else MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                title = { Text(file.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            ChoiTopBar(
+                title = { Text(shown.name, maxLines = 1, overflow = TextOverflow.MiddleEllipsis) },
                 navigationIcon = { IconButton(::close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 actions = {
                     if (kind == FileKind.MARKDOWN) {
                         IconButton({ mdSource = !mdSource }, enabled = !dirty) {
-                            Icon(if (mdSource) Icons.Default.Visibility else Icons.Default.Code, stringResource(if (mdSource) R.string.md_show_rendered else R.string.md_show_source))
+                            Icon(if (mdSource) Icons.Default.Visibility else Icons.Default.Code, stringResource(if (mdSource) R.string.md_show_rendered else R.string.md_show_source), Modifier.padding(0.dp))
                         }
                     }
                     if ((kind == FileKind.TEXT || (kind == FileKind.MARKDOWN && mdSource)) && !temporary) {
                         IconButton({ saveRequest++ }, enabled = dirty) { Icon(Icons.Default.Save, stringResource(R.string.save)) }
                     }
                     if (!temporary) {
-                        IconButton({ openWithOtherApp(context, file) }) { Icon(Icons.AutoMirrored.Filled.OpenInNew, stringResource(R.string.open_with)) }
-                        IconButton({ shareFiles(context, listOf(file)) }) { Icon(Icons.Default.Share, stringResource(R.string.share)) }
+                        IconButton({ onOpenWith?.invoke(shown) ?: openWithOtherApp(context, shown) }) { Icon(Icons.AutoMirrored.Filled.OpenInNew, stringResource(R.string.open_with)) }
+                        IconButton({ shareFiles(context, listOf(shown)) }) { Icon(Icons.Default.Share, stringResource(R.string.share)) }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.9f)),
             )
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (kind) {
-                FileKind.IMAGE -> ImageViewer(file)
-                FileKind.VIDEO -> VideoViewer(file)
+                FileKind.IMAGE -> ImagePager(file, siblings = !temporary) { shown = it }
+                FileKind.VIDEO -> VideoPlayer(file)
                 FileKind.PDF -> PdfViewer(file)
                 FileKind.MARKDOWN -> if (mdSource) TextViewer(file, saveRequest, readOnly = temporary, onDirty = { dirty = it }) else MarkdownViewer(file)
                 else -> TextViewer(file, saveRequest, readOnly = temporary, onDirty = { dirty = it })
@@ -126,20 +132,61 @@ fun ViewerScreen(file: File, temporary: Boolean = false, onClose: () -> Unit) {
     }
 
     if (confirmDiscard) {
-        AlertDialog(
+        ChoiDialog(
             onDismissRequest = { confirmDiscard = false },
             title = { Text(stringResource(R.string.unsaved_title)) },
             text = { Text(stringResource(R.string.unsaved_message)) },
-            confirmButton = { TextButton(onClose) { Text(stringResource(R.string.discard)) } },
-            dismissButton = { TextButton({ confirmDiscard = false }) { Text(stringResource(R.string.cancel)) } },
+            confirmButton = { DestructiveButton(onClose) { Text(stringResource(R.string.discard)) } },
+            dismissButton = { OutlineButton({ confirmDiscard = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }
 
+/** Zoom and pan of one image page; kept per file so swiping away and back keeps the zoom. */
+@Stable
+private class ZoomState {
+    var scale by mutableFloatStateOf(1f)
+    var offset by mutableStateOf(Offset.Zero)
+    val zoomed: Boolean get() = scale > 1.01f
+}
+
+/** Images next to [file] (same folder, natural order). Hidden files only when the opened one is hidden. */
+private fun imageSiblings(file: File): List<File> {
+    val dir = file.parentFile ?: return listOf(file)
+    val showHidden = file.name.startsWith(".")
+    val list = dir.listFiles()?.filter { it.isFile && kindOf(it) == FileKind.IMAGE && (showHidden || !it.name.startsWith(".")) }.orEmpty()
+    val sorted = list.sortedWith { a, b -> NaturalOrder.compare(a.name, b.name) }
+    return if (sorted.any { it.path == file.path }) sorted else listOf(file)
+}
+
 @Composable
-private fun ImageViewer(file: File) {
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
+private fun ImagePager(file: File, siblings: Boolean, onPage: (File) -> Unit) {
+    val files by produceState(listOf(file), file) {
+        if (siblings) value = withContext(Dispatchers.IO) { runCatching { imageSiblings(file) }.getOrDefault(listOf(file)) }
+    }
+    val start = files.indexOfFirst { it.path == file.path }.coerceAtLeast(0)
+    // Re-created once the folder listing arrives so the pager starts on the opened image.
+    androidx.compose.runtime.key(files.size) {
+        val pager = rememberPagerState(start) { files.size }
+        val zooms = remember { HashMap<String, ZoomState>() }
+        fun zoomOf(f: File) = zooms.getOrPut(f.path) { ZoomState() }
+        LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.collect { files.getOrNull(it)?.let(onPage) } }
+        val currentZoomed = files.getOrNull(pager.currentPage)?.let { zoomOf(it).zoomed } == true
+        HorizontalPager(
+            pager,
+            Modifier.fillMaxSize().background(Color.Black),
+            // While zoomed in, one-finger drags pan the image instead of turning the page.
+            userScrollEnabled = !currentZoomed,
+            beyondViewportPageCount = 1,
+            key = { files[it].path },
+        ) { page ->
+            ZoomableImage(files[page], zoomOf(files[page]))
+        }
+    }
+}
+
+@Composable
+private fun ZoomableImage(file: File, z: ZoomState) {
     var size by remember { mutableStateOf(IntSize.Zero) }
 
     fun clamp(o: Offset, s: Float): Offset {
@@ -148,18 +195,39 @@ private fun ImageViewer(file: File) {
         return Offset(o.x.coerceIn(-mx, mx), o.y.coerceIn(-my, my))
     }
 
+    fun zoomAround(focus: Offset, newScale: Float, pan: Offset = Offset.Zero) {
+        val target = newScale.coerceIn(1f, MAX_ZOOM)
+        val k = target / z.scale
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val rel = focus - center
+        z.offset = clamp((z.offset - rel) * k + rel + pan, target)
+        z.scale = target
+    }
+
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black)
             .onSizeChanged { size = it }
-            .pointerInput(Unit) {
-                detectTapGestures(onDoubleTap = { scale = 1f; offset = Offset.Zero })
+            .pointerInput(z) {
+                detectTapGestures(onDoubleTap = { pos -> if (z.zoomed) { z.scale = 1f; z.offset = Offset.Zero } else zoomAround(pos, 2.5f) })
             }
-            .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, _ ->
-                    scale = (scale * zoom).coerceIn(1f, 8f)
-                    offset = clamp(offset + pan * scale, scale)
+            .pointerInput(z) {
+                // Pinch always zooms; one finger pans only while zoomed, otherwise the event is left to the pager.
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent()
+                        val cancelled = event.changes.any { it.isConsumed }
+                        if (!cancelled) {
+                            val fingers = event.changes.count { it.pressed }
+                            if (fingers >= 2 || z.zoomed) {
+                                val zoom = event.calculateZoom()
+                                val pan = event.calculatePan()
+                                zoomAround(event.calculateCentroid(useCurrent = true), z.scale * zoom, pan)
+                                event.changes.forEach { if (it.positionChanged()) it.consume() }
+                            }
+                        }
+                    } while (!cancelled && event.changes.any { it.pressed })
                 }
             },
     ) {
@@ -168,25 +236,11 @@ private fun ImageViewer(file: File) {
             contentDescription = file.name,
             contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxSize().graphicsLayer {
-                scaleX = scale; scaleY = scale
-                translationX = offset.x; translationY = offset.y
+                scaleX = z.scale; scaleY = z.scale
+                translationX = z.offset.x; translationY = z.offset.y
             },
         )
     }
-}
-
-@Composable
-private fun VideoViewer(file: File) {
-    val context = LocalContext.current
-    val player = remember {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
-            prepare()
-            playWhenReady = true
-        }
-    }
-    DisposableEffect(Unit) { onDispose { player.release() } }
-    AndroidView({ PlayerView(it).apply { this.player = player } }, Modifier.fillMaxSize().background(Color.Black))
 }
 
 @Composable
@@ -217,13 +271,13 @@ private fun TextViewer(file: File, saveRequest: Int, readOnly: Boolean, onDirty:
     }
 
     val current = text ?: return
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.lg)) {
         BasicTextField(
             value = current,
             onValueChange = { text = it; onDirty(it != saved) },
             readOnly = readOnly,
             modifier = Modifier.fillMaxSize(),
-            textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground),
+            textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onBackground),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
             visualTransformation = transformation,
         )

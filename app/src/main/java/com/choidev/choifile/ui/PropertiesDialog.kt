@@ -14,13 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -73,7 +71,7 @@ fun PropertiesDialog(path: String, onDismiss: () -> Unit) {
     }
     DisposableEffect(path) { onDispose { job?.cancel() } }
 
-    AlertDialog(
+    ChoiDialog(
         onDismissRequest = onDismiss,
         title = { Text(file.name.ifEmpty { "/" }, maxLines = 2) },
         text = {
@@ -88,9 +86,9 @@ fun PropertiesDialog(path: String, onDismiss: () -> Unit) {
                     if (result == null) {
                         if (hashing) {
                             LinearProgressIndicator(progress = { if (file.length() > 0) (hashed.toFloat() / file.length()).coerceIn(0f, 1f) else 0f }, Modifier.fillMaxWidth())
-                            TextButton({ job?.cancel(); hashing = false }) { Text(stringResource(R.string.cancel)) }
+                            GhostButton({ job?.cancel(); hashing = false }) { Text(stringResource(R.string.cancel)) }
                         } else {
-                            OutlinedButton({
+                            OutlineButton({
                                 hashing = true; hashError = false; hashed = 0
                                 job = scope.launch(Dispatchers.IO) {
                                     try {
@@ -112,7 +110,7 @@ fun PropertiesDialog(path: String, onDismiss: () -> Unit) {
                             Text(algo.label, style = MaterialTheme.typography.labelMedium)
                             Row {
                                 SelectionContainer(Modifier.weight(1f)) { Text(value, fontFamily = FontFamily.Monospace, fontSize = 12.sp) }
-                                TextButton({ copyText(context, value) }) { Text(stringResource(R.string.copy)) }
+                                GhostButton({ copyText(context, value) }) { Text(stringResource(R.string.copy)) }
                             }
                         }
                         Spacer(Modifier.height(8.dp))
@@ -120,7 +118,7 @@ fun PropertiesDialog(path: String, onDismiss: () -> Unit) {
                             pasted, { pasted = it }, Modifier.fillMaxWidth(),
                             label = { Text(stringResource(R.string.prop_hash_paste)) },
                             textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp),
-                            trailingIcon = { TextButton({ pasted = readClipboard(context) }) { Text(stringResource(R.string.prop_paste)) } },
+                            trailingIcon = { GhostButton({ pasted = readClipboard(context) }) { Text(stringResource(R.string.prop_paste)) } },
                         )
                         if (pasted.isNotBlank()) {
                             val (cmp, algo) = FileHash.compare(result, pasted)
@@ -134,7 +132,7 @@ fun PropertiesDialog(path: String, onDismiss: () -> Unit) {
                 }
             }
         },
-        confirmButton = { TextButton(onDismiss) { Text(stringResource(R.string.close)) } },
+        confirmButton = { PrimaryButton(onDismiss) { Text(stringResource(R.string.close)) } },
     )
 }
 

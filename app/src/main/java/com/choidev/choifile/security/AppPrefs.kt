@@ -30,6 +30,16 @@ class AppPrefs(context: Context) {
     var relockSeconds: Int
         get() = sp.getInt("relock_seconds", 60)
         set(v) = sp.edit().putInt("relock_seconds", v).apply()
+    /** Seconds the app may spend in the background before the app lock / protected folders ask again. */
+    var graceSeconds: Int
+        get() = sp.getInt("grace_seconds", DEFAULT_GRACE_SECONDS)
+        set(v) = sp.edit().putInt("grace_seconds", v).apply()
+
+    /** JSON written by AssociationCodec: default app per file extension. */
+    var associations: String
+        get() = sp.getString("associations", "") ?: ""
+        set(v) = sp.edit().putString("associations", v).apply()
+
     var protectedFolders: Set<String>
         get() = sp.getStringSet("protected_folders", emptySet()).orEmpty().toSet()
         set(v) = sp.edit().putStringSet("protected_folders", v).apply()
