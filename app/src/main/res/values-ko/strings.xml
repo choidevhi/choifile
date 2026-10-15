@@ -670,4 +670,17 @@
     <string name="video_badge">동영상 %1$s</string>
     <string name="settings_section_language">언어</string>
     <string name="settings_language_system">시스템 설정과 같게</string>
+    <string name="ebook_view_as_text">텍스트로 보기</string>
+    <string name="settings_section_txt">텍스트 파일(.txt)</string>
+    <string name="txt_open_text">텍스트 뷰어</string>
+    <string name="txt_open_book">전자뷰어</string>
+    <string name="txt_open_note">파일을 길게 누른 뒤 “열기 방식”에서 한 번만 다른 뷰어로 열 수도 있어요. 두 뷰어 모두 위쪽 막대에서 서로 바꿀 수 있어요.</string>
+    <string name="ow_builtin_text">choifile 텍스트 뷰어</string>
+    <string name="ow_builtin_book">choifile 전자뷰어</string>
+    <string name="ow_builtin_book_sub">쪽 넘김, 책갈피, 읽던 위치 기억</string>
+    <string name="txt_open_ask">매번 묻기</string>
+    <string name="txt_ask_title">어떤 뷰어로 열까요?</string>
+    <string name="txt_ask_pin">고정하기</string>
+    <string name="txt_ask_pin_note">설정 &gt; 텍스트 파일에서 바꿀 수 있어요</string>
+    <string name="txt_pinned">텍스트 파일은 이제 이 방식으로 열려요</string>
 </resources>

@@ -70,7 +70,8 @@ Requires Android 8.0 (API 26) or later. choifile asks for "All files access" to 
 
 **Books and text**
 - An e-reader for `.txt` novels: page turns with a curl, fonts, themes, table of contents, search, bookmarks,
-  volume keys to turn pages, reading position kept per book
+  volume keys to turn pages, reading position kept per book; a tapped `.txt` asks for the text viewer or the
+  e-reader, and the answer can be pinned
 - Text files of any size open read-only and instantly (only the visible part is read); smaller ones can be edited
   in their own encoding
 

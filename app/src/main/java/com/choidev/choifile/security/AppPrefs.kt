@@ -6,6 +6,9 @@ import com.choidev.choifile.util.VideoEnd
 import com.choidev.choifile.util.VideoFit
 import com.choidev.choifile.util.VideoLeave
 
+/** How a tapped .txt opens: ask every time (the default), or the choice the user pinned. */
+enum class TxtOpen { ASK, TEXT, BOOK }
+
 /** Small SharedPreferences wrapper for everything that must survive a restart. */
 class AppPrefs(context: Context) {
     private val sp = context.getSharedPreferences("choifile_prefs", Context.MODE_PRIVATE)
@@ -59,6 +62,10 @@ class AppPrefs(context: Context) {
     var preferSoftware: Boolean
         get() = sp.getBoolean("video_prefer_software", false)
         set(v) = sp.edit().putBoolean("video_prefer_software", v).apply()
+
+    var txtOpen: TxtOpen
+        get() = sp.getString("txt_open", null)?.let { v -> TxtOpen.entries.firstOrNull { it.name == v } } ?: TxtOpen.ASK
+        set(v) = sp.edit().putString("txt_open", v.name).apply()
 
     var appLock: Boolean
         get() = sp.getBoolean("app_lock", false)

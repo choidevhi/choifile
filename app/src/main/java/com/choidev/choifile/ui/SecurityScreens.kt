@@ -54,7 +54,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.choidev.choifile.R
 import com.choidev.choifile.browser.BrowserViewModel
+import com.choidev.choifile.security.AppPrefs
 import com.choidev.choifile.security.Authenticator
+import com.choidev.choifile.security.TxtOpen
 import com.choidev.choifile.security.GRACE_CHOICES
 import com.choidev.choifile.util.OpenChoice
 import kotlinx.coroutines.launch
@@ -226,6 +228,20 @@ fun SettingsScreen(
                     if (associations.isNotEmpty()) {
                         OutlineButton(onClearAllAssociations, Modifier.padding(start = Space.sm, bottom = Space.sm)) { Text(stringResource(R.string.assoc_clear_all)) }
                     }
+                }
+            }
+            item {
+                SectionLabel(stringResource(R.string.settings_section_txt))
+                ChoiCard(cardModifier, padding = Space.sm) {
+                    val prefs = remember { AppPrefs(context) }
+                    var txtOpen by remember { mutableStateOf(prefs.txtOpen) }
+                    listOf(TxtOpen.ASK to R.string.txt_open_ask, TxtOpen.TEXT to R.string.txt_open_text, TxtOpen.BOOK to R.string.txt_open_book).forEach { (mode, label) ->
+                        RadioOption(txtOpen == mode, stringResource(label)) {
+                            txtOpen = mode
+                            prefs.txtOpen = mode
+                        }
+                    }
+                    MutedText(stringResource(R.string.txt_open_note), Modifier.padding(horizontal = Space.sm, vertical = Space.sm))
                 }
             }
             if (Build.VERSION.SDK_INT >= 33) item {

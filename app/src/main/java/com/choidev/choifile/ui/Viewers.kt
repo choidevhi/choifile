@@ -71,9 +71,10 @@ import com.choidev.choifile.util.openWithOtherApp
 import com.choidev.choifile.util.shareFiles
 import com.choidev.choifile.util.ZoomMath
 import com.choidev.choifile.util.SubtitleText
-import com.choidev.choifile.ebook.EBOOK_DEFAULT_MIN_BYTES
 import com.choidev.choifile.ebook.EBOOK_EXTENSIONS
 import com.choidev.choifile.ebook.EbookScreen
+import com.choidev.choifile.ebook.opensAsBook
+import com.choidev.choifile.security.AppPrefs
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -84,10 +85,11 @@ private const val MAX_TEXT_BYTES = 1_000_000L
 /**
  * Full-screen viewer. Images get a swipeable pager over the other images of the same folder (natural name order);
  * the title, share and "open with" always follow the image on screen. [onOpenWith] shows choifile's own
- * app picker; without it the system chooser is used.
+ * app picker; without it the system chooser is used. [asBook] picks the text viewer or the e-reader for a .txt file;
+ * null follows the setting.
  */
 @Composable
-fun ViewerScreen(file: File, temporary: Boolean = false, onOpenWith: ((File) -> Unit)? = null, onClose: () -> Unit) {
+fun ViewerScreen(file: File, temporary: Boolean = false, asBook: Boolean? = null, onOpenWith: ((File) -> Unit)? = null, onClose: () -> Unit) {
     val context = LocalContext.current
     val kind = kindOf(file)
     var shown by remember(file) { mutableStateOf(file) }
@@ -111,13 +113,13 @@ fun ViewerScreen(file: File, temporary: Boolean = false, onOpenWith: ((File) -> 
         return
     }
 
-    // Prose saved as text (a novel, a long .txt) reads as a book; smaller text files open in the text viewer, which
-    // offers the book view from its bar.
-    var asBook by remember(file) {
-        mutableStateOf(kind == FileKind.TEXT && file.extensionLower() in EBOOK_EXTENSIONS && file.length() >= EBOOK_DEFAULT_MIN_BYTES)
+    // A .txt opens in the view the caller picked (the pinned one when it did not); each offers the other from its bar.
+    val bookable = kind == FileKind.TEXT && file.extensionLower() in EBOOK_EXTENSIONS
+    var book by remember(file) {
+        mutableStateOf(bookable && (asBook ?: opensAsBook(AppPrefs(context).txtOpen) ?: false))
     }
-    if (asBook) {
-        EbookScreen(file, onClose = ::close)
+    if (book) {
+        EbookScreen(file, onPlainText = { book = false }, onClose = ::close)
         return
     }
 
@@ -147,8 +149,8 @@ fun ViewerScreen(file: File, temporary: Boolean = false, onOpenWith: ((File) -> 
                             Icon(if (mdSource) Icons.Outlined.Visibility else Icons.Outlined.Code, stringResource(if (mdSource) R.string.md_show_rendered else R.string.md_show_source), Modifier.padding(0.dp))
                         }
                     }
-                    if (kind == FileKind.TEXT && file.extensionLower() in EBOOK_EXTENSIONS && !dirty) {
-                        IconButton({ asBook = true }) { Icon(Icons.AutoMirrored.Outlined.MenuBook, stringResource(R.string.ebook_read_as_book)) }
+                    if (bookable && !dirty) {
+                        IconButton({ book = true }) { Icon(Icons.AutoMirrored.Outlined.MenuBook, stringResource(R.string.ebook_read_as_book)) }
                     }
                     if ((kind == FileKind.TEXT || (kind == FileKind.MARKDOWN && mdSource)) && !temporary && file.length() <= MAX_TEXT_BYTES) {
                         IconButton({ saveRequest++ }, enabled = dirty) { Icon(Icons.Outlined.Save, stringResource(R.string.save)) }

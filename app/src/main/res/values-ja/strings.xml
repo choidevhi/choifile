@@ -672,4 +672,17 @@
     <string name="vp_leave_message">ホームに戻ったり、ほかのアプリに切り替えたりしたときの動作です。あとから「その他」メニューで変更できます。</string>
     <string name="settings_section_language">言語</string>
     <string name="settings_language_system">システムと同じ</string>
+    <string name="ebook_view_as_text">テキストで表示</string>
+    <string name="settings_section_txt">テキストファイル(.txt)</string>
+    <string name="txt_open_text">テキストビューア</string>
+    <string name="txt_open_book">電子リーダー</string>
+    <string name="txt_open_note">ファイルを長押しして「開く方法」から一度だけ別のビューアで開くこともできます。どちらのビューアも上のバーで切り替えられます。</string>
+    <string name="ow_builtin_text">choifile テキストビューア</string>
+    <string name="ow_builtin_book">choifile 電子リーダー</string>
+    <string name="ow_builtin_book_sub">ページめくり、しおり、読んだ位置を記憶</string>
+    <string name="txt_open_ask">毎回確認</string>
+    <string name="txt_ask_title">どのビューアで開きますか?</string>
+    <string name="txt_ask_pin">固定する</string>
+    <string name="txt_ask_pin_note">設定 &gt; テキストファイルで変更できます</string>
+    <string name="txt_pinned">テキストファイルは今後この方法で開きます</string>
 </resources>

@@ -30,6 +30,7 @@ import com.choidev.choifile.ebook.data.SettingsStore
 import com.choidev.choifile.ebook.reader.ReaderScreen
 import com.choidev.choifile.ebook.ui.IosColors
 import com.choidev.choifile.ebook.ui.LocalIos
+import com.choidev.choifile.security.TxtOpen
 import com.choidev.choifile.ui.ChoiTheme
 import java.io.File
 
@@ -55,8 +56,12 @@ object EbookStores {
 /** Plain-text files the reader opens: novels and other prose saved as text. */
 val EBOOK_EXTENSIONS = setOf("txt")
 
-/** Text files at least this large open in the reader by default; smaller ones open in the text viewer. */
-const val EBOOK_DEFAULT_MIN_BYTES = 100L * 1024
+/** Whether a tapped .txt opens in the e-reader (true), the text viewer (false), or asks first (null). */
+fun opensAsBook(mode: TxtOpen): Boolean? = when (mode) {
+    TxtOpen.ASK -> null
+    TxtOpen.TEXT -> false
+    TxtOpen.BOOK -> true
+}
 
 /**
  * A text file read as a book (the e-reader from choireader, built in): pages with page-turn effects, fonts, themes,
@@ -64,7 +69,7 @@ const val EBOOK_DEFAULT_MIN_BYTES = 100L * 1024
  * app's library and found again by name and length, so reopening it continues where the reading stopped.
  */
 @Composable
-fun EbookScreen(file: File, onClose: () -> Unit) {
+fun EbookScreen(file: File, onPlainText: (() -> Unit)? = null, onClose: () -> Unit) {
     val context = LocalContext.current
     val library = remember { EbookStores.library(context) }
     val settings = remember { EbookStores.settings(context) }
@@ -78,7 +83,7 @@ fun EbookScreen(file: File, onClose: () -> Unit) {
     CompositionLocalProvider(LocalIos provides colors) {
         val book = id?.takeIf { it.isNotEmpty() }?.let { i -> books.firstOrNull { it.id == i } }
         if (book != null) {
-            ReaderScreen(book = book, library = library, settingsStore = settings, fonts = fonts, onBack = onClose)
+            ReaderScreen(book = book, library = library, settingsStore = settings, fonts = fonts, onBack = onClose, onPlainText = onPlainText)
         } else {
             BackHandler(onBack = onClose)
             Box(Modifier.fillMaxSize().background(ChoiTheme.colors.background), contentAlignment = Alignment.Center) {

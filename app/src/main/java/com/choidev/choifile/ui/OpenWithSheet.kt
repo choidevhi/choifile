@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.Checkbox
@@ -57,7 +58,8 @@ import java.io.File
 
 /**
  * "Open with" sheet: choifile's own viewer (when it handles the type) plus every app that accepts the file.
- * With "always" ticked the choice is remembered for the extension; settings can clear it again.
+ * With "always" ticked the choice is remembered for the extension; settings can clear it again. With [onBook] (a .txt)
+ * the built-in choice splits into the text viewer and the e-reader; [bookDefault] says which one "always" picked.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,6 +68,8 @@ fun OpenWithSheet(
     builtInLabel: Int?,
     current: OpenChoice?,
     onBuiltIn: (remember: Boolean) -> Unit,
+    onBook: ((remember: Boolean) -> Unit)? = null,
+    bookDefault: Boolean = false,
     onApp: (AppTarget, remember: Boolean) -> Unit,
     onAlwaysAsk: () -> Unit,
     onSystemChooser: () -> Unit,
@@ -100,10 +104,20 @@ fun OpenWithSheet(
                     item {
                         OpenRow(
                             icon = { Box(Modifier.size(36.dp).clip(RoundedCornerShape(Radius.lg)).background(c.primary), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(IconSize.md), tint = c.primaryForeground) } },
-                            title = stringResource(builtInLabel),
+                            title = stringResource(if (onBook != null) R.string.ow_builtin_text else builtInLabel),
                             subtitle = stringResource(R.string.ow_builtin_sub),
-                            selected = current == OpenChoice.BuiltIn,
+                            selected = current == OpenChoice.BuiltIn && (onBook == null || !bookDefault),
                         ) { onBuiltIn(always) }
+                    }
+                }
+                if (onBook != null) {
+                    item {
+                        OpenRow(
+                            icon = { Box(Modifier.size(36.dp).clip(RoundedCornerShape(Radius.lg)).background(c.primary), contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Outlined.MenuBook, null, Modifier.size(IconSize.md), tint = c.primaryForeground) } },
+                            title = stringResource(R.string.ow_builtin_book),
+                            subtitle = stringResource(R.string.ow_builtin_book_sub),
+                            selected = current == OpenChoice.BuiltIn && bookDefault,
+                        ) { onBook(always) }
                     }
                 }
                 val list = apps
@@ -142,6 +156,36 @@ fun OpenWithSheet(
             }
         }
     }
+}
+
+/**
+ * Asked when a .txt is tapped and no view is pinned: the text viewer or the e-reader. "Pin" remembers the answer
+ * (Settings > Text files can change it back to asking).
+ */
+@Composable
+fun TxtOpenDialog(file: File, onPick: (book: Boolean, pin: Boolean) -> Unit, onDismiss: () -> Unit) {
+    var pin by remember { mutableStateOf(false) }
+    ChoiDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.txt_ask_title)) },
+        text = {
+            Column(Modifier.fillMaxWidth()) {
+                Text(file.name, style = MaterialTheme.typography.bodySmall, color = ChoiTheme.colors.mutedForeground, maxLines = 2, overflow = TextOverflow.MiddleEllipsis)
+                Row(
+                    Modifier.fillMaxWidth().padding(top = Space.sm).toggleable(pin, role = Role.Checkbox, onValueChange = { pin = it }),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(pin, null)
+                    Column(Modifier.padding(start = Space.xs)) {
+                        Text(stringResource(R.string.txt_ask_pin), style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.txt_ask_pin_note), style = MaterialTheme.typography.bodySmall, color = ChoiTheme.colors.mutedForeground)
+                    }
+                }
+            }
+        },
+        dismissButton = { OutlineButton({ onPick(false, pin) }) { Text(stringResource(R.string.txt_open_text)) } },
+        confirmButton = { ChoiButton({ onPick(true, pin) }) { Text(stringResource(R.string.txt_open_book)) } },
+    )
 }
 
 @Composable

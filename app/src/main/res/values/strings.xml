@@ -672,4 +672,17 @@
     <string name="vp_leave_message">This applies when you go home or switch apps. You can change it later in the More menu.</string>
     <string name="settings_section_language">Language</string>
     <string name="settings_language_system">Same as the system</string>
+    <string name="ebook_view_as_text">View as text</string>
+    <string name="settings_section_txt">Text files (.txt)</string>
+    <string name="txt_open_text">Text viewer</string>
+    <string name="txt_open_book">E-reader</string>
+    <string name="txt_open_note">Long-press a file and tap Open with to pick either view once. Each view can also switch to the other from its top bar.</string>
+    <string name="ow_builtin_text">choifile text viewer</string>
+    <string name="ow_builtin_book">choifile e-reader</string>
+    <string name="ow_builtin_book_sub">Pages, bookmarks and your reading position</string>
+    <string name="txt_open_ask">Ask every time</string>
+    <string name="txt_ask_title">Open with which viewer?</string>
+    <string name="txt_ask_pin">Pin this choice</string>
+    <string name="txt_ask_pin_note">Change it in Settings &gt; Text files</string>
+    <string name="txt_pinned">Text files will always open this way</string>
 </resources>

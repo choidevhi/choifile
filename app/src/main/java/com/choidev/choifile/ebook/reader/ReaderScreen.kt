@@ -39,6 +39,7 @@ import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBackIos
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
+import androidx.compose.material.icons.automirrored.rounded.Notes
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Search
@@ -116,6 +117,8 @@ fun ReaderScreen(
     settingsStore: SettingsStore,
     fonts: Fonts,
     onBack: () -> Unit,
+    // choifile: switches to the plain text viewer; null hides the button.
+    onPlainText: (() -> Unit)? = null,
 ) {
     val settings = settingsStore.value
     val theme = settings.theme
@@ -564,7 +567,7 @@ fun ReaderScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(Icons.AutoMirrored.Rounded.ArrowBackIos, null, tint = chrome.accent, modifier = Modifier.size(20.dp))
-                            Text(stringResource(R.string.eb_library), color = chrome.accent, fontSize = 17.sp)
+                            Text(stringResource(R.string.back), color = chrome.accent, fontSize = 17.sp)
                         }
                         Text(
                             book.title,
@@ -574,9 +577,20 @@ fun ReaderScreen(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             textAlign = TextAlign.Center,
-                            modifier = Modifier.align(Alignment.Center).padding(horizontal = 96.dp),
+                            modifier = Modifier.align(Alignment.Center).padding(horizontal = if (onPlainText != null) 128.dp else 96.dp),
                         )
                         Row(Modifier.align(Alignment.CenterEnd).padding(end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (onPlainText != null) {
+                                Icon(
+                                    Icons.AutoMirrored.Rounded.Notes,
+                                    stringResource(R.string.ebook_view_as_text),
+                                    tint = chrome.accent,
+                                    modifier = Modifier
+                                        .pressable(onClick = onPlainText)
+                                        .padding(8.dp)
+                                        .size(24.dp),
+                                )
+                            }
                             Icon(
                                 Icons.Rounded.Search,
                                 stringResource(R.string.eb_search),
