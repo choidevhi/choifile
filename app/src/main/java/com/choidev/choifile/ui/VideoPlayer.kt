@@ -1,6 +1,12 @@
 package com.choidev.choifile.ui
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.graphics.Bitmap
+import android.media.MediaScannerConnection
+import android.os.Environment
 import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Looper
@@ -37,6 +43,7 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,6 +63,10 @@ import androidx.compose.material.icons.filled.Forward5
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.PictureInPictureAlt
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
@@ -86,6 +97,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.media3.common.text.Cue
+import com.choidev.choifile.util.SubtitleText
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -176,25 +196,8 @@ private fun videoSiblings(file: File): List<File> {
     return if (sorted.any { it.path == file.path }) sorted else listOf(file)
 }
 
-/** One playlist entry: the video plus the subtitle files next to it with the same base name. */
-@OptIn(UnstableApi::class)
-private fun mediaItem(file: File, folderNames: List<String>): MediaItem {
-    val subtitles = SidecarSubtitles.match(file.name, folderNames)
-    return MediaItem.Builder()
-        .setUri(Uri.fromFile(file))
-        .setMediaId(file.path)
-        .setSubtitleConfigurations(
-            subtitles.mapIndexed { i, s ->
-                MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(File(file.parentFile, s.fileName)))
-                    .setMimeType(s.mimeType)
-                    .setLanguage(s.language)
-                    .setLabel(s.label)
-                    .setSelectionFlags(if (i == 0) C.SELECTION_FLAG_DEFAULT else 0)
-                    .build()
-            },
-        )
-        .build()
-}
+/** One playlist entry. Subtitle files are not attached here: the player reads them itself ([loadExternalSubtitle]). */
+private fun mediaItem(file: File): MediaItem = MediaItem.Builder().setUri(Uri.fromFile(file)).setMediaId(file.path).build()
 
 /**
  * NextLib's FFmpeg renderers plus a subtitle renderer that decodes a whole subtitle file at once. Media3's default
@@ -214,9 +217,10 @@ private class PlayerRenderers(context: Context) : NextRenderersFactory(context) 
  * every Media3 container extractor, audio focus, and a pause when headphones are unplugged.
  */
 @OptIn(UnstableApi::class)
-private fun buildPlayer(context: Context, item: MediaItem, startMs: Long): ExoPlayer {
+private fun buildPlayer(context: Context, items: List<MediaItem>, index: Int, startMs: Long, software: Boolean): ExoPlayer {
+    // Hardware first (FFmpeg only for what the device cannot decode), or FFmpeg first when the user picked it.
     val renderers = PlayerRenderers(context)
-        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+        .setExtensionRendererMode(if (software) DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER else DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
         .setEnableDecoderFallback(true)
     val extractors = DefaultExtractorsFactory()
         .setConstantBitrateSeekingEnabled(true)
@@ -228,8 +232,9 @@ private fun buildPlayer(context: Context, item: MediaItem, startMs: Long): ExoPl
         .setHandleAudioBecomingNoisy(true)
         .build()
         .apply {
-            setMediaItem(item, startMs)
-            prepare()
+            // prepare() waits until the picture surface is attached (see VideoPlayer): FFmpeg's video renderer
+            // fails with a NullPointerException when it starts decoding before it has a surface to draw on.
+            setMediaItems(items, index, startMs)
             playWhenReady = true
         }
 }
@@ -253,8 +258,10 @@ private fun ExoPlayer.applyEnd(end: VideoEnd) {
  * changes brightness, on the right half volume (up to 200% with a software boost); pinch zooms the picture.
  *
  * Also: the other videos of the folder as a playlist, what to do at the end, resume where each video was left,
- * picture modes, an A-B loop, a control lock, frame stepping with a fine scrub, speeds from 0.25x to 3x, and audio
- * and subtitle track selection with an adjustable subtitle size.
+ * picture modes, an A-B loop, a control lock, frame stepping with a fine scrub, speeds from 0.25x to 3x, audio and
+ * subtitle tracks, subtitle files read by the player itself (any file in the folder, any encoding, shifted earlier
+ * or later, SAMI included), picture-in-picture, a choice of hardware or FFmpeg decoding, a sleep timer and
+ * screenshots.
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -273,11 +280,15 @@ fun VideoPlayer(
     val prefs = remember { AppPrefs(context) }
     val resume = remember { AppStores.videoResume(context) }
     val startMs = remember { resume.get(file.path) ?: 0L }
-    val player = remember {
-        buildPlayer(context, mediaItem(file, file.parentFile?.list()?.toList().orEmpty()), startMs).also { it.applyEnd(prefs.videoEnd) }
+    var software by remember { mutableStateOf(prefs.preferSoftware) }
+    var player by remember {
+        mutableStateOf(buildPlayer(context, listOf(mediaItem(file)), 0, startMs, software).also { it.applyEnd(prefs.videoEnd) })
     }
     val brightness = remember { PlayerBrightness(activity) }
-    val volume = remember { PlayerVolume(context, player) }
+    val volume = remember { PlayerVolume(context) { player } }
+    val delays = remember { AppStores.subtitleDelays(context) }
+    val scope = rememberCoroutineScope()
+    val inPip = rememberIsInPip()
     val alive = remember { booleanArrayOf(true) }
 
     var current by remember { mutableStateOf(file) }
@@ -290,6 +301,7 @@ fun VideoPlayer(
             player.release()
             volume.release()
             brightness.restore()
+            VideoPip.reset(activity)
             activity?.requestedOrientation = orientation
             activity?.setSystemBarsHidden(false)
         }
@@ -330,6 +342,16 @@ fun VideoPlayer(
     var oriented by remember { mutableStateOf(false) }
     var touched by remember { mutableIntStateOf(0) } // bumps on every interaction to restart the auto-hide timer
     val subtitleView = remember { SubtitleView(context) }
+    var textureView by remember { mutableStateOf<TextureView?>(null) }
+    var folderNames by remember { mutableStateOf<List<String>>(emptyList()) }
+    var external by remember { mutableStateOf<ExternalSubtitle?>(null) }
+    var subtitleDelay by remember { mutableLongStateOf(0L) }
+    var subtitleColor by remember { mutableIntStateOf(prefs.subtitleColor) }
+    var subtitleBox by remember { mutableStateOf(prefs.subtitleBox) }
+    var sleepAt by remember { mutableStateOf<Long?>(null) } // uptime when the sleep timer pauses playback
+    var sleepAtEnd by remember { mutableStateOf(false) }
+    var sleepMenu by remember { mutableStateOf(false) }
+    var decoderMenu by remember { mutableStateOf(false) }
 
     fun refreshNeighbours() {
         hasPrev = player.hasPreviousMediaItem()
@@ -338,20 +360,25 @@ fun VideoPlayer(
 
     // The rest of the folder joins the playlist once listed, around the playing video, without interrupting it.
     LaunchedEffect(Unit) {
-        if (!siblings) return@LaunchedEffect
+        if (!siblings) {
+            folderNames = withContext(Dispatchers.IO) { runCatching { file.parentFile?.list()?.toList().orEmpty() }.getOrDefault(emptyList()) }
+            return@LaunchedEffect
+        }
         val (all, names) = withContext(Dispatchers.IO) {
             runCatching { videoSiblings(file) to file.parentFile?.list()?.toList().orEmpty() }.getOrDefault(listOf(file) to emptyList())
         }
+        folderNames = names
         val at = all.indexOfFirst { it.path == file.path }
         if (at < 0 || all.size < 2 || !alive[0]) return@LaunchedEffect
-        val before = all.subList(0, at).map { mediaItem(it, names) }
-        val after = all.subList(at + 1, all.size).map { mediaItem(it, names) }
+        val before = all.subList(0, at).map(::mediaItem)
+        val after = all.subList(at + 1, all.size).map(::mediaItem)
         if (after.isNotEmpty()) player.addMediaItems(after)
         if (before.isNotEmpty()) player.addMediaItems(0, before)
         refreshNeighbours()
     }
 
     DisposableEffect(player) {
+        val attached = player
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playing = isPlaying
@@ -386,12 +413,19 @@ fun VideoPlayer(
             override fun onVideoSizeChanged(size: VideoSize) { videoSize = size }
             override fun onRenderedFirstFrame() { seeker.seekDone() }
             override fun onTracksChanged(t: Tracks) { tracks = t }
-            override fun onCues(cueGroup: CueGroup) { subtitleView.setCues(cueGroup.cues) }
+            // Embedded subtitle tracks; a subtitle file of our own takes the view over instead.
+            override fun onCues(cueGroup: CueGroup) { if (external == null) subtitleView.setCues(cueGroup.cues) }
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (sleepAtEnd && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) {
+                    sleepAtEnd = false
+                    player.applyEnd(end)
+                }
+            }
             override fun onAudioSessionIdChanged(audioSessionId: Int) = volume.onSessionChanged()
             override fun onPlayerError(e: PlaybackException) { error = e.errorCodeName }
         }
-        player.addListener(listener)
-        onDispose { player.removeListener(listener) }
+        attached.addListener(listener)
+        onDispose { attached.removeListener(listener) }
     }
 
     LaunchedEffect(player) {
@@ -410,6 +444,98 @@ fun VideoPlayer(
             }
             delay(if (playing) 50 else 250)
         }
+    }
+
+    fun useEmbeddedText(enabled: Boolean) {
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !enabled).build()
+    }
+    fun showFile(f: File, charset: String? = null) {
+        scope.launch {
+            val loaded = withContext(Dispatchers.IO) { loadExternalSubtitle(f, charset) }
+            if (!alive[0]) return@launch
+            if (loaded == null) {
+                flash = context.getString(R.string.vp_sub_unreadable)
+                return@launch
+            }
+            external = loaded
+            useEmbeddedText(false)
+        }
+    }
+    fun showEmbedded() {
+        external = null
+        subtitleView.setCues(emptyList())
+        useEmbeddedText(true)
+    }
+    fun subtitlesOff() {
+        external = null
+        subtitleView.setCues(emptyList())
+        useEmbeddedText(false)
+    }
+    fun setDelay(ms: Long) {
+        subtitleDelay = ms
+        if (ms == 0L) delays.remove(current.path) else delays.put(current.path, ms)
+    }
+
+    // Each video starts with its same-name subtitle file when there is one, else with the embedded track.
+    LaunchedEffect(current, folderNames) {
+        subtitleDelay = delays.get(current.path) ?: 0L
+        val match = subtitleFilesFor(current, folderNames).firstOrNull { SidecarSubtitles.match(current.name, listOf(it.name)).isNotEmpty() }
+        if (match != null) showFile(match) else showEmbedded()
+    }
+    // Our own subtitle file: show the lines for the current position, shifted by the delay.
+    LaunchedEffect(external, subtitleDelay) {
+        val ext = external ?: return@LaunchedEffect
+        var shown: List<Cue>? = null
+        while (true) {
+            val cues = ext.timeline.at(position * 1000, subtitleDelay * 1000)
+            if (cues != shown) {
+                subtitleView.setCues(cues)
+                shown = cues
+            }
+            delay(40)
+        }
+    }
+
+    // ---- picture-in-picture: automatic while playing, the small window's buttons, pause when it is closed ----
+    LaunchedEffect(playing, videoSize, textureView) {
+        val a = activity ?: return@LaunchedEffect
+        val rect = textureView?.let { v -> android.graphics.Rect().also { v.getGlobalVisibleRect(it) } }
+        val params = VideoPip.params(context, VideoPip.aspect((videoSize.width * videoSize.pixelWidthHeightRatio).toInt(), videoSize.height), rect, playing)
+        VideoPip.lastParams = params
+        VideoPip.autoEnter = playing
+        runCatching { a.setPictureInPictureParams(params) }
+    }
+    DisposableEffect(Unit) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, intent: Intent) {
+                when (intent.getIntExtra(VideoPip.EXTRA, 0)) {
+                    VideoPip.PLAY_PAUSE -> if (player.isPlaying) player.pause() else player.play()
+                    VideoPip.BACK -> player.seekTo((player.currentPosition - 10_000).coerceAtLeast(0))
+                    VideoPip.FORWARD -> player.seekTo(player.currentPosition + 10_000)
+                }
+            }
+        }
+        ContextCompat.registerReceiver(context, receiver, IntentFilter(VideoPip.ACTION), ContextCompat.RECEIVER_NOT_EXPORTED)
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+    // The app went out of sight (home, another app, the PiP window closed): stop the sound too.
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        player.pause()
+        resume.put(current.path, player.currentPosition, player.duration)
+    }
+    LaunchedEffect(player, textureView) {
+        val tv = textureView ?: return@LaunchedEffect
+        player.setVideoTextureView(tv)
+        if (player.playbackState == Player.STATE_IDLE && alive[0]) player.prepare()
+    }
+
+    // ---- sleep timer ----
+    LaunchedEffect(sleepAt) {
+        val at = sleepAt ?: return@LaunchedEffect
+        delay((at - SystemClock.uptimeMillis()).coerceAtLeast(0))
+        player.pause()
+        sleepAt = null
+        flash = context.getString(R.string.vp_sleep_done)
     }
 
     // Landscape videos turn the screen once, when their size is first known; the rotate button overrides it.
@@ -431,11 +557,10 @@ fun VideoPlayer(
         view.keepScreenOn = playing
         onDispose { view.keepScreenOn = false }
     }
-    LaunchedEffect(subtitleScale, controls, locked, bottomPanel, box) {
-        subtitleView.setUserDefaultStyle()
-        subtitleView.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * subtitleScale)
+    LaunchedEffect(subtitleScale, subtitleColor, subtitleBox, controls, locked, bottomPanel, box, inPip) {
+        subtitleView.applyLook(subtitleScale, subtitleColor, subtitleBox)
         // Lift the subtitles above the bottom controls while those are showing.
-        val lifted = if (controls && !locked && box.height > 0) bottomPanel / box.height.toFloat() + 0.02f else 0f
+        val lifted = if (controls && !locked && !inPip && box.height > 0) bottomPanel / box.height.toFloat() + 0.02f else 0f
         subtitleView.setBottomPaddingFraction(maxOf(SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION, lifted))
     }
 
@@ -519,6 +644,57 @@ fun VideoPlayer(
         prefs.videoEnd = e
         player.applyEnd(e)
     }
+    /** Rebuilds the player with the other decoder order, keeping the playlist, the position and the speed. */
+    fun setSoftware(sw: Boolean) {
+        if (sw == software) return
+        val old = player
+        val items = (0 until old.mediaItemCount).map(old::getMediaItemAt)
+        val index = old.currentMediaItemIndex
+        val at = old.currentPosition
+        val wasPlaying = old.playWhenReady
+        old.release()
+        software = sw
+        prefs.preferSoftware = sw
+        error = null
+        player = buildPlayer(context, items, index, at, sw).also {
+            it.applyEnd(end)
+            it.playbackParameters = PlaybackParameters(speed)
+            it.playWhenReady = wasPlaying
+            if (external != null) it.trackSelectionParameters = it.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
+        }
+        flash = context.getString(if (sw) R.string.vp_decoder_sw else R.string.vp_decoder_hw)
+    }
+    fun setSleep(minutes: Int?) {
+        sleepAt = minutes?.let { SystemClock.uptimeMillis() + it * 60_000L }
+        if (sleepAtEnd) player.applyEnd(end)
+        sleepAtEnd = false
+    }
+    fun setSleepAtEnd() {
+        sleepAt = null
+        sleepAtEnd = true
+        player.pauseAtEndOfMediaItems = true
+    }
+    /** Saves the frame on screen as a JPEG in Pictures/choifile, at the video's own size. */
+    fun screenshot() {
+        val tv = textureView ?: return
+        val w = videoSize.width.takeIf { it > 0 } ?: tv.width
+        val h = videoSize.height.takeIf { it > 0 } ?: tv.height
+        val bitmap = runCatching { tv.getBitmap(w, h) }.getOrNull() ?: return
+        val name = current.nameWithoutExtension + "_" + ScrubMath.format(player.currentPosition).replace(':', '-') + ".jpg"
+        scope.launch {
+            val saved = withContext(Dispatchers.IO) {
+                runCatching {
+                    val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "choifile").apply { mkdirs() }
+                    val out = File(dir, name)
+                    out.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it) }
+                    MediaScannerConnection.scanFile(context, arrayOf(out.path), arrayOf("image/jpeg"), null)
+                    out
+                }.getOrNull()
+            }
+            bitmap.recycle()
+            flash = if (saved != null) context.getString(R.string.vp_screenshot_saved) else context.getString(R.string.vp_screenshot_failed)
+        }
+    }
     fun rotate() {
         val a = activity ?: return
         val landscape = a.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
@@ -549,7 +725,7 @@ fun VideoPlayer(
     ) {
         val (w, h) = VideoMath.fitSize(fit, videoSize.width, videoSize.height, videoSize.pixelWidthHeightRatio, box.width.toFloat(), box.height.toFloat())
         AndroidView(
-            factory = { TextureView(it).also(player::setVideoTextureView) },
+            factory = { TextureView(it).also { tv -> textureView = tv } },
             modifier = with(density) { Modifier.requiredSize(w.toDp(), h.toDp()) }.graphicsLayer {
                 scaleX = zoom.scale; scaleY = zoom.scale
                 translationX = zoom.offsetX; translationY = zoom.offsetY
@@ -562,7 +738,8 @@ fun VideoPlayer(
         Box(
             Modifier
                 .fillMaxSize()
-                .pointerInput(step, locked) {
+                .pointerInput(step, locked, inPip) {
+                    if (inPip) return@pointerInput
                     detectTapGestures(
                         onTap = { controls = !controls; touched++ },
                         onDoubleTap = { pos ->
@@ -583,8 +760,8 @@ fun VideoPlayer(
                         },
                     )
                 }
-                .pointerInput(locked, duration, fit) {
-                    if (locked) return@pointerInput
+                .pointerInput(locked, duration, fit, inPip) {
+                    if (locked || inPip) return@pointerInput
                     val slop = viewConfiguration.touchSlop
                     // Drags starting at the very top or bottom belong to the system (notification shade, home).
                     val edge = 32.dp.toPx()
@@ -657,25 +834,32 @@ fun VideoPlayer(
                 },
         )
 
-        hud?.let { HudView(it, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = Space.xl)) }
+        if (!inPip) hud?.let { HudView(it, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = Space.xl)) }
         if (holdSpeed != null) HudView(Hud(Icons.Default.FastForward, "${HOLD_SPEED.toInt()}x"), Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = Space.xl))
-        flash?.let {
+        if (!inPip) flash?.let {
             Surface(Modifier.align(Alignment.Center), shape = RoundedCornerShape(Radius.xl), color = CONTROL_TINT, contentColor = Color.White) {
                 Text(it, Modifier.padding(horizontal = Space.lg, vertical = Space.sm), style = MaterialTheme.typography.titleMedium)
             }
         }
         error?.let {
             Surface(Modifier.align(Alignment.Center).padding(Space.xl), shape = RoundedCornerShape(Radius.xl), color = Color.Black.copy(alpha = 0.7f), contentColor = Color.White) {
-                Text(stringResource(R.string.vp_error, it), Modifier.padding(Space.lg), style = MaterialTheme.typography.bodyMedium)
+                Column(Modifier.padding(Space.lg), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(stringResource(R.string.vp_error, it), style = MaterialTheme.typography.bodyMedium)
+                    // A decoder that fails on this file often works the other way round.
+                    if (!inPip) {
+                        Spacer(Modifier.height(Space.md))
+                        Pill(stringResource(if (software) R.string.vp_retry_hw else R.string.vp_retry_sw), active = true) { setSoftware(!software) }
+                    }
+                }
             }
         }
 
         // Locked: only an unlock button, shown briefly after a tap.
-        AnimatedVisibility(locked && controls, Modifier.align(Alignment.CenterStart).padding(start = Space.xl), enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(locked && controls && !inPip, Modifier.align(Alignment.CenterStart).padding(start = Space.xl), enter = fadeIn(), exit = fadeOut()) {
             GlassCircle(Icons.Default.Lock, stringResource(R.string.vp_unlock), size = 52) { locked = false; touched++ }
         }
 
-        val visible = (controls || scrub != null) && !locked
+        val visible = (controls || scrub != null) && !locked && !inPip
         // Top: close, title, the viewer's own actions, lock.
         AnimatedVisibility(visible, Modifier.align(Alignment.TopCenter), enter = fadeIn(), exit = fadeOut()) {
             Row(
@@ -692,6 +876,8 @@ fun VideoPlayer(
                     style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.MiddleEllipsis,
                 )
                 GlassBar { actions() }
+                Spacer(Modifier.width(Space.sm))
+                GlassCircle(Icons.Default.PictureInPictureAlt, stringResource(R.string.vp_pip)) { VideoPip.enter(activity) }
                 Spacer(Modifier.width(Space.sm))
                 GlassCircle(Icons.Default.LockOpen, stringResource(R.string.vp_lock)) { locked = true; touched++ }
             }
@@ -712,7 +898,7 @@ fun VideoPlayer(
         }
 
         // Offer to start over when a video reopened where it was left.
-        AnimatedVisibility(resumeOffer && !locked, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 64.dp), enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(resumeOffer && !locked && !inPip, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 64.dp), enter = fadeIn(), exit = fadeOut()) {
             Surface(shape = CircleShape, color = CONTROL_TINT, contentColor = Color.White, border = BorderStroke(Hairline, Color.White.copy(alpha = 0.15f))) {
                 Row(Modifier.padding(start = Space.lg, end = Space.xs, top = Space.xs, bottom = Space.xs), verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.vp_resumed), style = MaterialTheme.typography.labelLarge)
@@ -797,7 +983,9 @@ fun VideoPlayer(
                                 }
                             }
                         }
-                        if (hasPickableTracks(tracks)) IconPill(Icons.Default.Subtitles, stringResource(R.string.vp_tracks)) { trackDialog = true; touched++ }
+                        if (hasPickableTracks(tracks) || subtitleFilesFor(current, folderNames).isNotEmpty()) {
+                            IconPill(Icons.Default.Subtitles, stringResource(R.string.vp_subtitle_menu), active = external != null && subtitleDelay != 0L) { trackDialog = true; touched++ }
+                        }
                         IconPill(
                             if (end == VideoEnd.REPEAT_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
                             endLabel(end), active = end == VideoEnd.REPEAT_ONE || end == VideoEnd.REPEAT_ALL,
@@ -819,20 +1007,41 @@ fun VideoPlayer(
                         var more by remember { mutableStateOf(false) }
                         Box {
                             IconPill(Icons.Default.MoreHoriz, stringResource(R.string.more)) { more = true; touched++ }
+                            ChoiMenu(sleepMenu, { sleepMenu = false }) {
+                                ChoiMenuItem(stringResource(R.string.vp_sleep_off), { setSleep(null); sleepMenu = false }, checked = sleepAt == null && !sleepAtEnd)
+                                listOf(15, 30, 45, 60, 90).forEach { m ->
+                                    ChoiMenuItem(stringResource(R.string.vp_sleep_min, m), { setSleep(m); sleepMenu = false })
+                                }
+                                ChoiMenuItem(stringResource(R.string.vp_sleep_end), { setSleepAtEnd(); sleepMenu = false }, checked = sleepAtEnd)
+                            }
+                            ChoiMenu(decoderMenu, { decoderMenu = false }) {
+                                ChoiMenuItem(stringResource(R.string.vp_decoder_hw), { setSoftware(false); decoderMenu = false }, checked = !software, subtitle = stringResource(R.string.vp_decoder_hw_desc))
+                                ChoiMenuItem(stringResource(R.string.vp_decoder_sw), { setSoftware(true); decoderMenu = false }, checked = software, subtitle = stringResource(R.string.vp_decoder_sw_desc))
+                            }
                             ChoiMenu(more, { more = false }) {
                                 ChoiMenuItem(stringResource(R.string.vp_step, step), {
                                     step = STEPS[(STEPS.indexOf(step) + 1) % STEPS.size]
                                     prefs.videoStep = step
                                 })
-                                ChoiMenuItem(stringResource(R.string.vp_subtitle_size, VideoMath.percent(subtitleScale)), {
-                                    subtitleScale = SUBTITLE_SCALES[(SUBTITLE_SCALES.indexOf(subtitleScale) + 1).mod(SUBTITLE_SCALES.size)]
-                                    prefs.subtitleScale = subtitleScale
-                                })
+                                val left = sleepAt?.let { ((it - SystemClock.uptimeMillis()) / 60_000 + 1).toInt() }
+                                ChoiMenuItem(
+                                    stringResource(R.string.vp_sleep), { more = false; sleepMenu = true }, icon = Icons.Default.Bedtime,
+                                    subtitle = when {
+                                        left != null -> stringResource(R.string.vp_sleep_left, left)
+                                        sleepAtEnd -> stringResource(R.string.vp_sleep_end)
+                                        else -> null
+                                    },
+                                )
+                                ChoiMenuItem(
+                                    stringResource(R.string.vp_decoder), { more = false; decoderMenu = true }, icon = Icons.Default.Memory,
+                                    subtitle = stringResource(if (software) R.string.vp_decoder_sw else R.string.vp_decoder_hw),
+                                )
+                                ChoiMenuItem(stringResource(R.string.vp_screenshot), { more = false; screenshot() }, icon = Icons.Default.PhotoCamera)
                                 ChoiMenuItem(stringResource(R.string.vp_rotate), { rotate(); more = false }, icon = Icons.Default.ScreenRotation)
                                 ChoiMenuDivider()
                                 Text(
                                     stringResource(R.string.vp_gesture_help),
-                                    Modifier.padding(horizontal = Space.lg, vertical = Space.sm),
+                                    Modifier.widthIn(max = 300.dp).padding(horizontal = Space.lg, vertical = Space.sm),
                                     style = MaterialTheme.typography.bodySmall, color = ChoiTheme.colors.mutedForeground,
                                 )
                             }
@@ -843,7 +1052,26 @@ fun VideoPlayer(
         }
     }
 
-    if (trackDialog) TrackDialog(player, tracks) { trackDialog = false }
+    if (trackDialog) {
+        SubtitleDialog(
+            player = player, tracks = tracks, files = subtitleFilesFor(current, folderNames), external = external,
+            delayMs = subtitleDelay, scale = subtitleScale, colorIndex = subtitleColor, box = subtitleBox,
+            onFile = { f, cs -> showFile(f, cs) },
+            onEmbedded = { group, index ->
+                external = null
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                    .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, index))
+                    .build()
+            },
+            onOff = ::subtitlesOff,
+            onDelay = ::setDelay,
+            onScale = { subtitleScale = it; prefs.subtitleScale = it },
+            onColor = { subtitleColor = it; prefs.subtitleColor = it },
+            onBox = { subtitleBox = it; prefs.subtitleBox = it },
+            onDismiss = { trackDialog = false },
+        )
+    }
 }
 
 /** The centroid of the fingers still down, or null on the event that lifts the last one. */
@@ -883,43 +1111,119 @@ private fun hasPickableTracks(tracks: Tracks): Boolean =
     tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }.sumOf { it.length } > 1 ||
         tracks.groups.any { it.type == C.TRACK_TYPE_TEXT }
 
-/** Audio and subtitle tracks (embedded and sidecar files); picking one overrides the automatic choice. */
-@OptIn(UnstableApi::class)
+/**
+ * Audio tracks, then subtitles: off, the embedded tracks, and every subtitle file in the folder (same-name files
+ * first). For a file: its sync (shift earlier or later) and its encoding. Last, the look of all subtitles.
+ */
+@OptIn(UnstableApi::class, ExperimentalLayoutApi::class)
 @Composable
-private fun TrackDialog(player: ExoPlayer, tracks: Tracks, onDismiss: () -> Unit) {
+private fun SubtitleDialog(
+    player: ExoPlayer,
+    tracks: Tracks,
+    files: List<File>,
+    external: ExternalSubtitle?,
+    delayMs: Long,
+    scale: Float,
+    colorIndex: Int,
+    box: Boolean,
+    onFile: (File, String?) -> Unit,
+    onEmbedded: (Tracks.Group, Int) -> Unit,
+    onOff: () -> Unit,
+    onDelay: (Long) -> Unit,
+    onScale: (Float) -> Unit,
+    onColor: (Int) -> Unit,
+    onBox: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val c = ChoiTheme.colors
     val audio = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
     val text = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
-    fun select(group: Tracks.Group, index: Int) {
+    fun selectAudio(group: Tracks.Group, index: Int) {
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(group.type, false)
             .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, index))
             .build()
     }
+    val embeddedOn = external == null && C.TRACK_TYPE_TEXT !in player.trackSelectionParameters.disabledTrackTypes && text.any { it.isSelected }
     ChoiDialog(
         onDismissRequest = onDismiss,
         confirmButton = { GhostButton(onDismiss) { Text(stringResource(R.string.close)) } },
-        title = { Text(stringResource(R.string.vp_tracks)) },
+        title = { Text(stringResource(R.string.vp_subtitle_menu)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                if (audio.isEmpty() && text.isEmpty()) Text(stringResource(R.string.vp_no_tracks))
-                if (audio.isNotEmpty()) {
+                if (audio.sumOf { it.length } > 1) {
                     TrackHeader(stringResource(R.string.vp_audio))
-                    TrackRows(audio, ::select)
+                    TrackRows(audio, ::selectAudio)
                 }
-                if (text.isNotEmpty()) {
-                    TrackHeader(stringResource(R.string.vp_subtitles))
-                    val off = C.TRACK_TYPE_TEXT in player.trackSelectionParameters.disabledTrackTypes || text.none { it.isSelected }
-                    TrackRow(stringResource(R.string.vp_subtitles_off), selected = off, supported = true) {
-                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                            .build()
+                TrackHeader(stringResource(R.string.vp_subtitles))
+                TrackRow(stringResource(R.string.vp_subtitles_off), selected = external == null && !embeddedOn, supported = true, onClick = onOff)
+                if (text.isNotEmpty()) TrackRows(text) { g, i -> onEmbedded(g, i) }
+                files.forEach { f ->
+                    TrackRow(f.name, selected = external?.file?.path == f.path, supported = true) { onFile(f, null) }
+                }
+
+                if (external != null) {
+                    TrackHeader(stringResource(R.string.vp_sub_sync))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically) {
+                        SyncButton("−0.5") { onDelay(delayMs - 500) }
+                        SyncButton("−0.1") { onDelay(delayMs - 100) }
+                        Text(
+                            (if (delayMs > 0) "+" else if (delayMs < 0) "−" else "") + "%.1f".format(abs(delayMs) / 1000f) + "s",
+                            Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            style = MaterialTheme.typography.titleMedium, fontFamily = FontFamily.Monospace,
+                        )
+                        SyncButton("+0.1") { onDelay(delayMs + 100) }
+                        SyncButton("+0.5") { onDelay(delayMs + 500) }
                     }
-                    TrackRows(text, ::select)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.vp_sub_sync_hint), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = c.mutedForeground)
+                        if (delayMs != 0L) GhostButton({ onDelay(0) }) { Text(stringResource(R.string.vp_sub_reset)) }
+                    }
+
+                    TrackHeader(stringResource(R.string.vp_sub_encoding))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                        SubtitleText.CHOICES.forEach { cs ->
+                            ChoiceChip(SubtitleText.label(cs), selected = external.charset == cs) { onFile(external.file, cs) }
+                        }
+                    }
+                } else if (text.isNotEmpty()) {
+                    Text(stringResource(R.string.vp_sub_embedded_note), Modifier.padding(top = Space.sm), style = MaterialTheme.typography.bodySmall, color = c.mutedForeground)
+                }
+
+                TrackHeader(stringResource(R.string.vp_sub_look))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    SUBTITLE_SCALES.forEach { s -> ChoiceChip("${VideoMath.percent(s)}%", selected = s == scale) { onScale(s) } }
+                }
+                Spacer(Modifier.height(Space.sm))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    listOf(R.string.vp_color_white, R.string.vp_color_yellow, R.string.vp_color_cyan).forEachIndexed { i, label ->
+                        ChoiceChip(stringResource(label), selected = i == colorIndex) { onColor(i) }
+                    }
+                    ChoiceChip(stringResource(R.string.vp_sub_box), selected = box) { onBox(!box) }
                 }
             }
         },
     )
+}
+
+@Composable
+private fun SyncButton(label: String, onClick: () -> Unit) {
+    val c = ChoiTheme.colors
+    Box(
+        Modifier.clip(RoundedCornerShape(Radius.md)).background(c.secondary).clickable(onClick = onClick).padding(horizontal = Space.md, vertical = Space.sm),
+    ) { Text(label, style = MaterialTheme.typography.labelLarge, color = c.primary, fontFamily = FontFamily.Monospace) }
+}
+
+@Composable
+private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val c = ChoiTheme.colors
+    Box(
+        Modifier
+            .clip(CircleShape)
+            .background(if (selected) c.primary else c.secondary)
+            .clickable(onClick = onClick)
+            .padding(horizontal = Space.md, vertical = Space.xs + 2.dp),
+    ) { Text(label, style = MaterialTheme.typography.labelLarge, color = if (selected) c.primaryForeground else c.foreground) }
 }
 
 @OptIn(UnstableApi::class)

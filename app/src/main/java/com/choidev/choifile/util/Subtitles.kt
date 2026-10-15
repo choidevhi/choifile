@@ -13,6 +13,9 @@ object SidecarSubtitles {
         "ass" to "text/x-ssa",
         "ssa" to "text/x-ssa",
         "vtt" to "text/vtt",
+        // SAMI: Media3 cannot read it; the player parses it itself (SmiParser).
+        "smi" to "application/x-sami",
+        "sami" to "application/x-sami",
     )
 
     data class Match(val fileName: String, val mimeType: String, val language: String?, val label: String)

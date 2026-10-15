@@ -69,6 +69,12 @@ private enum class Screen { BROWSER, SETTINGS, VAULT, SEARCH, CONNECTIONS, OPERA
 
 /** Biometric prompts need a FragmentActivity (ComponentActivity is not enough). */
 class MainActivity : FragmentActivity() {
+    // Below Android 12 the system cannot enter picture-in-picture on its own; a playing video asks for it here.
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (android.os.Build.VERSION.SDK_INT < 31 && com.choidev.choifile.ui.VideoPip.autoEnter) com.choidev.choifile.ui.VideoPip.enter(this)
+    }
+
     private val viewModel: BrowserViewModel by viewModels()
     private lateinit var authenticator: Authenticator
     private val grace = GracePeriod(clock = SystemClock::elapsedRealtime)

@@ -50,7 +50,7 @@ class PlayerBrightness(private val activity: Activity?) {
  * Media volume 0..[VideoMath.MAX_VOLUME]: up to 1 it is the system media volume, above that a LoudnessEnhancer on
  * the player's audio session boosts quiet videos up to +10 dB. The boost is dropped when the player closes.
  */
-class PlayerVolume(context: Context, private val player: ExoPlayer) {
+class PlayerVolume(context: Context, private val player: () -> ExoPlayer) {
     private val audio = context.getSystemService(AudioManager::class.java)
     private val maxSteps = audio?.getStreamMaxVolume(AudioManager.STREAM_MUSIC)?.coerceAtLeast(1) ?: 15
     private var enhancer: LoudnessEnhancer? = null
@@ -73,7 +73,7 @@ class PlayerVolume(context: Context, private val player: ExoPlayer) {
         boostMb = mb
         if (mb == 0 && enhancer == null) return
         runCatching {
-            val session = player.audioSessionId
+            val session = player().audioSessionId
             if (enhancer == null || enhancerSession != session) {
                 enhancer?.release()
                 enhancer = LoudnessEnhancer(session)

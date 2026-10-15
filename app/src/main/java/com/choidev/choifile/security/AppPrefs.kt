@@ -39,6 +39,18 @@ class AppPrefs(context: Context) {
     var subtitleScale: Float
         get() = sp.getFloat("subtitle_scale", 1f)
         set(v) = sp.edit().putFloat("subtitle_scale", v).apply()
+    /** Index into the subtitle colors (white, yellow, cyan). */
+    var subtitleColor: Int
+        get() = sp.getInt("subtitle_color", 0)
+        set(v) = sp.edit().putInt("subtitle_color", v).apply()
+    /** Subtitles on a dark box instead of an outline. */
+    var subtitleBox: Boolean
+        get() = sp.getBoolean("subtitle_box", false)
+        set(v) = sp.edit().putBoolean("subtitle_box", v).apply()
+    /** Decode video with FFmpeg first instead of the device's hardware decoders. */
+    var preferSoftware: Boolean
+        get() = sp.getBoolean("video_prefer_software", false)
+        set(v) = sp.edit().putBoolean("video_prefer_software", v).apply()
 
     var appLock: Boolean
         get() = sp.getBoolean("app_lock", false)

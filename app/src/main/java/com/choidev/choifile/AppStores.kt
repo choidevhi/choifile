@@ -5,6 +5,7 @@ import com.choidev.choifile.oplog.OperationLog
 import com.choidev.choifile.rules.RuleStore
 import com.choidev.choifile.storage.FavoritesStore
 import com.choidev.choifile.storage.FolderViewModes
+import com.choidev.choifile.storage.KeyedLongStore
 import com.choidev.choifile.storage.PositionStore
 import com.choidev.choifile.storage.VideoResume
 import java.io.File
@@ -21,6 +22,7 @@ object AppStores {
     @Volatile private var favorites: FavoritesStore? = null
     @Volatile private var viewModes: FolderViewModes? = null
     @Volatile private var videoResume: VideoResume? = null
+    @Volatile private var subtitleDelays: KeyedLongStore? = null
 
     fun log(context: Context): OperationLog = log ?: synchronized(this) {
         log ?: OperationLog(File(context.applicationContext.filesDir, "operations.json")).also { log = it }
@@ -53,5 +55,10 @@ object AppStores {
     /** Video player: where each video was left. Cleared together with the cache in settings. */
     fun videoResume(context: Context): VideoResume = videoResume ?: synchronized(this) {
         videoResume ?: VideoResume(File(context.applicationContext.filesDir, "video_resume.json")).also { videoResume = it }
+    }
+
+    /** Video player: subtitle delay in ms per video, for videos where it was changed. Cleared with the cache. */
+    fun subtitleDelays(context: Context): KeyedLongStore = subtitleDelays ?: synchronized(this) {
+        subtitleDelays ?: KeyedLongStore(File(context.applicationContext.filesDir, "subtitle_delays.json")).also { subtitleDelays = it }
     }
 }

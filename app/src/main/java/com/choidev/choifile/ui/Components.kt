@@ -145,7 +145,8 @@ fun ChoiDialog(
             shadowElevation = 16.dp,
         ) {
             Column {
-                Column(Modifier.padding(start = Space.lg, end = Space.lg, top = Space.lg + Space.xs, bottom = Space.lg)) {
+                // Long content scrolls inside its own area; the action row below always stays on screen.
+                Column(Modifier.weight(1f, fill = false).padding(start = Space.lg, end = Space.lg, top = Space.lg + Space.xs, bottom = Space.lg)) {
                     icon?.let { Box(Modifier.align(Alignment.CenterHorizontally).padding(bottom = Space.md)) { it() } }
                     title?.let {
                         Box(Modifier.align(Alignment.CenterHorizontally)) {

@@ -344,6 +344,7 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
         cache.listFiles()?.forEach { f -> if (f.name != "image_cache") f.deleteRecursively() }
         AppStores.readingPositions(app).clear()
         AppStores.videoResume(app).clear()
+        AppStores.subtitleDelays(app).clear()
         com.choidev.choifile.util.VideoDurations.clear()
         val after = cache.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
         (before - after).coerceAtLeast(0)
