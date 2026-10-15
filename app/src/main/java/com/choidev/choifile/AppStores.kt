@@ -4,7 +4,9 @@ import android.content.Context
 import com.choidev.choifile.oplog.OperationLog
 import com.choidev.choifile.rules.RuleStore
 import com.choidev.choifile.storage.FavoritesStore
+import com.choidev.choifile.storage.FolderViewModes
 import com.choidev.choifile.storage.PositionStore
+import com.choidev.choifile.storage.VideoResume
 import java.io.File
 
 /**
@@ -17,6 +19,8 @@ object AppStores {
     @Volatile private var reading: PositionStore? = null
     @Volatile private var scroll: PositionStore? = null
     @Volatile private var favorites: FavoritesStore? = null
+    @Volatile private var viewModes: FolderViewModes? = null
+    @Volatile private var videoResume: VideoResume? = null
 
     fun log(context: Context): OperationLog = log ?: synchronized(this) {
         log ?: OperationLog(File(context.applicationContext.filesDir, "operations.json")).also { log = it }
@@ -39,5 +43,15 @@ object AppStores {
     /** Drawer: the user's starred folders, in the user's order. */
     fun favorites(context: Context): FavoritesStore = favorites ?: synchronized(this) {
         favorites ?: FavoritesStore(File(context.applicationContext.filesDir, "favorites.json")).also { favorites = it }
+    }
+
+    /** File list: grid or list per folder. */
+    fun viewModes(context: Context): FolderViewModes = viewModes ?: synchronized(this) {
+        viewModes ?: FolderViewModes(File(context.applicationContext.filesDir, "view_modes.json")).also { viewModes = it }
+    }
+
+    /** Video player: where each video was left. Cleared together with the cache in settings. */
+    fun videoResume(context: Context): VideoResume = videoResume ?: synchronized(this) {
+        videoResume ?: VideoResume(File(context.applicationContext.filesDir, "video_resume.json")).also { videoResume = it }
     }
 }

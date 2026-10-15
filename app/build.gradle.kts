@@ -11,8 +11,8 @@ android {
         applicationId = "com.choidev.choifile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.4.3"
+        versionCode = 8
+        versionName = "0.4.4"
         // -Pchoifile.abi=arm64-v8a builds a single-ABI APK (smaller download for phones).
         providers.gradleProperty("choifile.abi").orNull?.let { ndk { abiFilters += it.split(",") } }
     }

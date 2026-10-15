@@ -2,6 +2,8 @@ package com.choidev.choifile.security
 
 import android.content.Context
 import com.choidev.choifile.storage.SortKey
+import com.choidev.choifile.util.VideoEnd
+import com.choidev.choifile.util.VideoFit
 
 /** Small SharedPreferences wrapper for everything that must survive a restart. */
 class AppPrefs(context: Context) {
@@ -22,6 +24,21 @@ class AppPrefs(context: Context) {
     var showHidden: Boolean
         get() = sp.getBoolean("show_hidden", false)
         set(v) = sp.edit().putBoolean("show_hidden", v).apply()
+
+    /** Video player choices that carry over from one video to the next. */
+    var videoEnd: VideoEnd
+        get() = runCatching { VideoEnd.valueOf(sp.getString("video_end", "NEXT")!!) }.getOrDefault(VideoEnd.NEXT)
+        set(v) = sp.edit().putString("video_end", v.name).apply()
+    var videoFit: VideoFit
+        get() = runCatching { VideoFit.valueOf(sp.getString("video_fit", "FIT")!!) }.getOrDefault(VideoFit.FIT)
+        set(v) = sp.edit().putString("video_fit", v.name).apply()
+    var videoStep: Int
+        get() = sp.getInt("video_step", 10)
+        set(v) = sp.edit().putInt("video_step", v).apply()
+    /** Subtitle text size as a multiple of the default. */
+    var subtitleScale: Float
+        get() = sp.getFloat("subtitle_scale", 1f)
+        set(v) = sp.edit().putFloat("subtitle_scale", v).apply()
 
     var appLock: Boolean
         get() = sp.getBoolean("app_lock", false)

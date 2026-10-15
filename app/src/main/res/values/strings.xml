@@ -506,6 +506,31 @@
     <string name="vp_no_tracks">선택할 트랙이 없습니다</string>
     <string name="vp_unsupported">재생할 수 없는 트랙</string>
     <string name="vp_error">재생할 수 없습니다: %1$s</string>
+    <string name="vp_fit_fit">맞춤</string>
+    <string name="vp_fit_crop">꽉 채우기</string>
+    <string name="vp_fit_stretch">늘리기</string>
+    <string name="vp_fit_original">원본 크기</string>
+    <string name="vp_brightness">밝기</string>
+    <string name="vp_volume">볼륨</string>
+    <string name="vp_boost">증폭</string>
+    <string name="vp_zoom">확대</string>
+    <string name="vp_lock">화면 잠금</string>
+    <string name="vp_unlock">잠금 해제</string>
+    <string name="vp_prev">이전 영상</string>
+    <string name="vp_next">다음 영상</string>
+    <string name="vp_resumed">이어서 재생 중</string>
+    <string name="vp_start_over">처음부터</string>
+    <string name="vp_frame">프레임 이동</string>
+    <string name="vp_step">건너뛰기 간격: %1$d초</string>
+    <string name="vp_subtitle_size">자막 크기: %1$d%%</string>
+    <string name="vp_rotate">화면 돌리기</string>
+    <string name="vp_gesture_help">두 번 탭: 건너뛰기 · 길게 누르기: 2배속
+좌우로 밀기: 탐색 · 왼쪽 위아래: 밝기
+오른쪽 위아래: 볼륨 · 두 손가락: 확대</string>
+    <string name="vp_end_next">다음 영상</string>
+    <string name="vp_end_repeat_one">한 개 반복</string>
+    <string name="vp_end_repeat_all">전체 반복</string>
+    <string name="vp_end_stop">끝나면 정지</string>
     <string name="grid_select">선택</string>
 
     <!-- 만화 뷰어 -->

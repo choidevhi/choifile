@@ -35,7 +35,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -44,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -69,12 +69,12 @@ import com.choidev.choifile.util.extensionLower
 import com.choidev.choifile.util.kindOf
 import com.choidev.choifile.util.openWithOtherApp
 import com.choidev.choifile.util.shareFiles
+import com.choidev.choifile.util.ZoomMath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
 private const val MAX_TEXT_BYTES = 1_000_000L
-private const val MAX_ZOOM = 8f
 
 /**
  * Full-screen viewer. Images get a swipeable pager over the other images of the same folder (natural name order);
@@ -96,7 +96,20 @@ fun ViewerScreen(file: File, temporary: Boolean = false, onOpenWith: ((File) -> 
     fun close() = if (dirty) confirmDiscard = true else onClose()
     BackHandler(onBack = ::close)
 
-    val media = kind == FileKind.IMAGE || kind == FileKind.VIDEO
+    // Video takes the whole screen and draws its own floating top bar.
+    if (kind == FileKind.VIDEO) {
+        VideoPlayer(file, siblings = !temporary, onFile = { shown = it }, onClose = ::close) {
+            if (!temporary) {
+                IconButton({ onOpenWith?.invoke(shown) ?: openWithOtherApp(context, shown) }) {
+                    Icon(Icons.AutoMirrored.Filled.OpenInNew, stringResource(R.string.open_with), tint = Color.White)
+                }
+                IconButton({ shareFiles(context, listOf(shown)) }) { Icon(Icons.Default.Share, stringResource(R.string.share), tint = Color.White) }
+            }
+        }
+        return
+    }
+
+    val media = kind == FileKind.IMAGE
     Scaffold(
         containerColor = if (media) Color.Black else MaterialTheme.colorScheme.background,
         topBar = {
@@ -123,7 +136,6 @@ fun ViewerScreen(file: File, temporary: Boolean = false, onOpenWith: ((File) -> 
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (kind) {
                 FileKind.IMAGE -> ImagePager(file, siblings = !temporary) { shown = it }
-                FileKind.VIDEO -> VideoPlayer(file)
                 FileKind.PDF -> PdfViewer(file)
                 FileKind.MARKDOWN -> if (mdSource) TextViewer(file, saveRequest, readOnly = temporary, onDirty = { dirty = it }) else MarkdownViewer(file)
                 else -> TextViewer(file, saveRequest, readOnly = temporary, onDirty = { dirty = it })
@@ -145,9 +157,8 @@ fun ViewerScreen(file: File, temporary: Boolean = false, onOpenWith: ((File) -> 
 /** Zoom and pan of one image page; kept per file so swiping away and back keeps the zoom. */
 @Stable
 private class ZoomState {
-    var scale by mutableFloatStateOf(1f)
-    var offset by mutableStateOf(Offset.Zero)
-    val zoomed: Boolean get() = scale > 1.01f
+    var view by mutableStateOf(ZoomMath.View())
+    val zoomed: Boolean get() = view.scale > 1.01f
 }
 
 /** Images next to [file] (same folder, natural order). Hidden files only when the opened one is hidden. */
@@ -189,19 +200,8 @@ private fun ImagePager(file: File, siblings: Boolean, onPage: (File) -> Unit) {
 private fun ZoomableImage(file: File, z: ZoomState) {
     var size by remember { mutableStateOf(IntSize.Zero) }
 
-    fun clamp(o: Offset, s: Float): Offset {
-        val mx = size.width * (s - 1) / 2
-        val my = size.height * (s - 1) / 2
-        return Offset(o.x.coerceIn(-mx, mx), o.y.coerceIn(-my, my))
-    }
-
     fun zoomAround(focus: Offset, newScale: Float, pan: Offset = Offset.Zero) {
-        val target = newScale.coerceIn(1f, MAX_ZOOM)
-        val k = target / z.scale
-        val center = Offset(size.width / 2f, size.height / 2f)
-        val rel = focus - center
-        z.offset = clamp((z.offset - rel) * k + rel + pan, target)
-        z.scale = target
+        z.view = ZoomMath.zoomAround(z.view, size.width.toFloat(), size.height.toFloat(), focus.x, focus.y, newScale, pan.x, pan.y)
     }
 
     Box(
@@ -209,7 +209,7 @@ private fun ZoomableImage(file: File, z: ZoomState) {
             .fillMaxSize()
             .onSizeChanged { size = it }
             .pointerInput(z) {
-                detectTapGestures(onDoubleTap = { pos -> if (z.zoomed) { z.scale = 1f; z.offset = Offset.Zero } else zoomAround(pos, 2.5f) })
+                detectTapGestures(onDoubleTap = { pos -> if (z.zoomed) z.view = ZoomMath.View() else zoomAround(pos, 2.5f) })
             }
             .pointerInput(z) {
                 // Pinch always zooms; one finger pans only while zoomed, otherwise the event is left to the pager.
@@ -218,12 +218,13 @@ private fun ZoomableImage(file: File, z: ZoomState) {
                     do {
                         val event = awaitPointerEvent()
                         val cancelled = event.changes.any { it.isConsumed }
-                        if (!cancelled) {
-                            val fingers = event.changes.count { it.pressed }
-                            if (fingers >= 2 || z.zoomed) {
-                                val zoom = event.calculateZoom()
-                                val pan = event.calculatePan()
-                                zoomAround(event.calculateCentroid(useCurrent = true), z.scale * zoom, pan)
+                        // The lift event has no finger still down, so its centroid is Offset.Unspecified (NaN).
+                        // Feeding that into zoomAround poisoned the stored offset and blanked the page until reopen.
+                        val fingers = event.changes.count { it.pressed && it.previousPressed }
+                        if (!cancelled && fingers > 0 && (fingers >= 2 || z.zoomed)) {
+                            val centroid = event.calculateCentroid(useCurrent = true)
+                            if (centroid.isSpecified) {
+                                zoomAround(centroid, z.view.scale * event.calculateZoom(), event.calculatePan())
                                 event.changes.forEach { if (it.positionChanged()) it.consume() }
                             }
                         }
@@ -236,8 +237,8 @@ private fun ZoomableImage(file: File, z: ZoomState) {
             contentDescription = file.name,
             contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxSize().graphicsLayer {
-                scaleX = z.scale; scaleY = z.scale
-                translationX = z.offset.x; translationY = z.offset.y
+                scaleX = z.view.scale; scaleY = z.view.scale
+                translationX = z.view.offsetX; translationY = z.view.offsetY
             },
         )
     }

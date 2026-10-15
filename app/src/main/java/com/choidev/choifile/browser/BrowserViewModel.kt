@@ -168,6 +168,7 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- operation log, analysis, duplicates, automation ----
     private val opLog = AppStores.log(app)
+    private val viewModes = AppStores.viewModes(app)
     private val ops = FileOps(store, opLog)
     private val ruleStore = AppStores.rules(app)
     private val _opRecords = MutableStateFlow(opLog.all())
@@ -342,6 +343,7 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
         }
         cache.listFiles()?.forEach { f -> if (f.name != "image_cache") f.deleteRecursively() }
         AppStores.readingPositions(app).clear()
+        AppStores.videoResume(app).clear()
         com.choidev.choifile.util.VideoDurations.clear()
         val after = cache.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
         (before - after).coerceAtLeast(0)
@@ -379,7 +381,7 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun restoreState(): BrowserState {
         val saved = prefs.tabs.filter { File(it.path).isDirectory }
-        val tabs = if (saved.isEmpty()) listOf(Tab(0, rootPath)) else saved.mapIndexed { i, t -> Tab(i, t.path, t.grid) }
+        val tabs = if (saved.isEmpty()) listOf(Tab(0, rootPath)) else saved.mapIndexed { i, t -> Tab(i, t.path, viewModes.isGrid(t.path)) }
         return BrowserState(
             tabs = tabs,
             current = prefs.currentTab.coerceIn(0, tabs.size - 1),
@@ -391,8 +393,11 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- navigation / tabs ----
 
+    /** [this] tab moved to [path], showing it the way the user last chose for that folder. */
+    private fun Tab.at(path: String) = copy(path = path, grid = viewModes.isGrid(path))
+
     fun openDir(path: String) = _state.update { s ->
-        s.copy(tabs = s.tabs.mapAt(s.current) { it.copy(path = path) }, selection = emptySet())
+        s.copy(tabs = s.tabs.mapAt(s.current) { it.at(path) }, selection = emptySet())
     }
 
     fun up(): Boolean {
@@ -429,7 +434,13 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
         s.copy(tabs = tabs, current = current, selection = emptySet())
     }
 
-    fun toggleGrid() = _state.update { s -> s.copy(tabs = s.tabs.mapAt(s.current) { it.copy(grid = !it.grid) }) }
+    fun toggleGrid() {
+        val tab = _state.value.tab
+        val grid = !tab.grid
+        viewModes.set(tab.path, grid)
+        // Other tabs showing the same folder follow, so one folder never looks two ways at once.
+        _state.update { s -> s.copy(tabs = s.tabs.map { if (it.path == tab.path) it.copy(grid = grid) else it }) }
+    }
     fun setSort(key: SortKey) = _state.update { it.copy(sort = key) }
     fun toggleAscending() = _state.update { it.copy(ascending = !it.ascending) }
     fun toggleHidden() = _state.update { it.copy(showHidden = !it.showHidden) }
@@ -1091,7 +1102,7 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
                 sessions.invalidate(id)
                 _connections.value = connectionRepo.load().connections
                 // Leave tabs that pointed at the removed connection.
-                _state.update { s -> s.copy(tabs = s.tabs.map { t -> if (RemoteLocation.isRemote(t.path) && RemoteLocation.connectionOf(t.path) == id) t.copy(path = rootPath) else t }) }
+                _state.update { s -> s.copy(tabs = s.tabs.map { t -> if (RemoteLocation.isRemote(t.path) && RemoteLocation.connectionOf(t.path) == id) t.at(rootPath) else t }) }
             } catch (e: Exception) {
                 say(R.string.msg_error, RemoteFactory.describe(e))
             }
