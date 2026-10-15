@@ -18,9 +18,9 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.outlined.ArrowBackIos
+import androidx.compose.material.icons.automirrored.outlined.List
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,7 +36,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -95,10 +94,10 @@ fun RulesScreen(vm: BrowserViewModel, onOpenLog: () -> Unit, onBack: () -> Unit)
         topBar = {
             ChoiTopBar(
                 title = { Text(stringResource(R.string.rules_title)) },
-                navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
+                navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBackIos, stringResource(R.string.back)) } },
                 actions = {
-                    IconButton(onOpenLog) { Icon(Icons.AutoMirrored.Filled.List, stringResource(R.string.rules_history)) }
-                    IconButton({ editing = Rule(name = "", condition = RuleCondition(vm.rootPath + "/Download"), action = RuleAction.MOVE) }) { Icon(Icons.Default.Add, stringResource(R.string.rules_add)) }
+                    IconButton(onOpenLog) { Icon(Icons.AutoMirrored.Outlined.List, stringResource(R.string.rules_history)) }
+                    IconButton({ editing = Rule(name = "", condition = RuleCondition(vm.rootPath + "/Download"), action = RuleAction.MOVE) }) { Icon(Icons.Outlined.Add, stringResource(R.string.rules_add)) }
                 },
             )
         },
@@ -128,7 +127,7 @@ fun RulesScreen(vm: BrowserViewModel, onOpenLog: () -> Unit, onBack: () -> Unit)
                     },
                     trailingContent = {
                         if (r.trigger == RuleTrigger.DAILY) {
-                            Switch(r.enabled, { on -> if (!on) vm.setRuleEnabled(r.id, false) else if (r.reviewed) vm.setRuleEnabled(r.id, true) else preview = PreviewRequest(r, PreviewMode.ENABLE) })
+                            ChoiSwitch(r.enabled, { on -> if (!on) vm.setRuleEnabled(r.id, false) else if (r.reviewed) vm.setRuleEnabled(r.id, true) else preview = PreviewRequest(r, PreviewMode.ENABLE) })
                         }
                     },
                 )

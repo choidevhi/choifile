@@ -15,12 +15,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
-import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.automirrored.outlined.ArrowBackIos
+import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -109,8 +109,8 @@ fun OperationsScreen(vm: BrowserViewModel, onBack: () -> Unit) {
         topBar = {
             ChoiTopBar(
                 title = { Text(stringResource(R.string.ops_title)) },
-                navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
-                actions = { IconButton({ confirmClear = true }, enabled = records.isNotEmpty()) { Icon(Icons.Default.DeleteSweep, stringResource(R.string.ops_clear)) } },
+                navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBackIos, stringResource(R.string.back)) } },
+                actions = { IconButton({ confirmClear = true }, enabled = records.isNotEmpty()) { Icon(Icons.Outlined.DeleteSweep, stringResource(R.string.ops_clear)) } },
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
@@ -199,8 +199,8 @@ fun AnalysisScreen(vm: BrowserViewModel, onOpenFolder: (String) -> Unit, onBack:
     Scaffold(topBar = {
         ChoiTopBar(
             title = { Text(stringResource(R.string.analysis_title)) },
-            navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
-            actions = { IconButton({ vm.analysis.start() }, enabled = !state.scanning) { Icon(Icons.Default.Refresh, stringResource(R.string.analysis_rescan)) } },
+            navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBackIos, stringResource(R.string.back)) } },
+            actions = { IconButton({ vm.analysis.start() }, enabled = !state.scanning) { Icon(Icons.Outlined.Refresh, stringResource(R.string.analysis_rescan)) } },
         )
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
@@ -255,9 +255,9 @@ private fun FolderTab(node: DirNode, canGoUp: Boolean, onUp: () -> Unit, onEnter
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 8.dp, end = 8.dp)) {
-                IconButton(onUp, enabled = canGoUp) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.up)) }
+                IconButton(onUp, enabled = canGoUp) { Icon(Icons.AutoMirrored.Outlined.ArrowBackIos, stringResource(R.string.up)) }
                 Text(node.path, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.StartEllipsis, style = MaterialTheme.typography.bodySmall)
-                IconButton(onOpen) { Icon(Icons.Default.FolderOpen, stringResource(R.string.analysis_open_in_browser)) }
+                IconButton(onOpen) { Icon(Icons.Outlined.FolderOpen, stringResource(R.string.analysis_open_in_browser)) }
             }
         }
         if (rows.isEmpty()) item { Text(stringResource(R.string.analysis_empty_folder), Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -266,7 +266,7 @@ private fun FolderTab(node: DirNode, canGoUp: Boolean, onUp: () -> Unit, onEnter
             if (any is DirNode) {
                 ListItem(
                     modifier = Modifier.clickable { onEnter(any) },
-                    leadingContent = { Icon(Icons.Default.Folder, null, tint = MaterialTheme.colorScheme.primary) },
+                    leadingContent = { Icon(Icons.Filled.Folder, null, tint = MaterialTheme.colorScheme.primary) },
                     headlineContent = { Text(any.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     supportingContent = { Column { SizeBar(size.toFloat() / total); Text(stringResource(R.string.analysis_folder_meta, any.fileCount), style = MaterialTheme.typography.bodySmall) } },
                     trailingContent = { Text(Formatter.formatShortFileSize(context, size) + "  " + percent(size, total)) },
@@ -274,7 +274,7 @@ private fun FolderTab(node: DirNode, canGoUp: Boolean, onUp: () -> Unit, onEnter
             } else {
                 val f = any as FileEntry
                 ListItem(
-                    leadingContent = { Icon(Icons.AutoMirrored.Filled.InsertDriveFile, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    leadingContent = { Icon(Icons.AutoMirrored.Outlined.InsertDriveFile, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
                     headlineContent = { Text(File(f.path).name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     supportingContent = { SizeBar(size.toFloat() / total) },
                     trailingContent = { Text(Formatter.formatShortFileSize(context, size) + "  " + percent(size, total)) },
@@ -314,7 +314,7 @@ private fun typeLabel(c: TypeCategory) = when (c) {
 private fun FileSizeRow(f: FileEntry, max: Long, rootRelative: String) {
     val context = LocalContext.current
     ListItem(
-        leadingContent = { Icon(Icons.AutoMirrored.Filled.InsertDriveFile, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        leadingContent = { Icon(Icons.AutoMirrored.Outlined.InsertDriveFile, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
         headlineContent = { Text(File(f.path).name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         supportingContent = { Column { SizeBar(f.size.toFloat() / max.coerceAtLeast(1)); Text(File(rootRelative).parent.orEmpty(), maxLines = 1, overflow = TextOverflow.StartEllipsis, style = MaterialTheme.typography.bodySmall) } },
         trailingContent = { Text(Formatter.formatShortFileSize(context, f.size)) },
@@ -350,7 +350,7 @@ fun DuplicatesScreen(vm: BrowserViewModel, onBack: () -> Unit) {
         topBar = {
             ChoiTopBar(
                 title = { Text(stringResource(R.string.dup_title)) },
-                navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
+                navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBackIos, stringResource(R.string.back)) } },
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },

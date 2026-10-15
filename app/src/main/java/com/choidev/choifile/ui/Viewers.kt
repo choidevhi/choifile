@@ -20,12 +20,12 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.automirrored.outlined.ArrowBackIos
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -101,9 +101,9 @@ fun ViewerScreen(file: File, temporary: Boolean = false, onOpenWith: ((File) -> 
         VideoPlayer(file, siblings = !temporary, onFile = { shown = it }, onClose = ::close) {
             if (!temporary) {
                 IconButton({ onOpenWith?.invoke(shown) ?: openWithOtherApp(context, shown) }) {
-                    Icon(Icons.AutoMirrored.Filled.OpenInNew, stringResource(R.string.open_with), tint = Color.White)
+                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, stringResource(R.string.open_with), tint = Color.White)
                 }
-                IconButton({ shareFiles(context, listOf(shown)) }) { Icon(Icons.Default.Share, stringResource(R.string.share), tint = Color.White) }
+                IconButton({ shareFiles(context, listOf(shown)) }) { Icon(Icons.Outlined.Share, stringResource(R.string.share), tint = Color.White) }
             }
         }
         return
@@ -115,19 +115,19 @@ fun ViewerScreen(file: File, temporary: Boolean = false, onOpenWith: ((File) -> 
         topBar = {
             ChoiTopBar(
                 title = { Text(shown.name, maxLines = 1, overflow = TextOverflow.MiddleEllipsis) },
-                navigationIcon = { IconButton(::close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
+                navigationIcon = { IconButton(::close) { Icon(Icons.AutoMirrored.Outlined.ArrowBackIos, stringResource(R.string.back)) } },
                 actions = {
                     if (kind == FileKind.MARKDOWN) {
                         IconButton({ mdSource = !mdSource }, enabled = !dirty) {
-                            Icon(if (mdSource) Icons.Default.Visibility else Icons.Default.Code, stringResource(if (mdSource) R.string.md_show_rendered else R.string.md_show_source), Modifier.padding(0.dp))
+                            Icon(if (mdSource) Icons.Outlined.Visibility else Icons.Outlined.Code, stringResource(if (mdSource) R.string.md_show_rendered else R.string.md_show_source), Modifier.padding(0.dp))
                         }
                     }
                     if ((kind == FileKind.TEXT || (kind == FileKind.MARKDOWN && mdSource)) && !temporary) {
-                        IconButton({ saveRequest++ }, enabled = dirty) { Icon(Icons.Default.Save, stringResource(R.string.save)) }
+                        IconButton({ saveRequest++ }, enabled = dirty) { Icon(Icons.Outlined.Save, stringResource(R.string.save)) }
                     }
                     if (!temporary) {
-                        IconButton({ onOpenWith?.invoke(shown) ?: openWithOtherApp(context, shown) }) { Icon(Icons.AutoMirrored.Filled.OpenInNew, stringResource(R.string.open_with)) }
-                        IconButton({ shareFiles(context, listOf(shown)) }) { Icon(Icons.Default.Share, stringResource(R.string.share)) }
+                        IconButton({ onOpenWith?.invoke(shown) ?: openWithOtherApp(context, shown) }) { Icon(Icons.AutoMirrored.Outlined.OpenInNew, stringResource(R.string.open_with)) }
+                        IconButton({ shareFiles(context, listOf(shown)) }) { Icon(Icons.Outlined.Share, stringResource(R.string.share)) }
                     }
                 },
             )

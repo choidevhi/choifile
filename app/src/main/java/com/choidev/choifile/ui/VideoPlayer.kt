@@ -780,10 +780,10 @@ fun VideoPlayer(
                             Pill(if (speed == 1f) "1x" else "${speed}x", active = speed != 1f) { speedMenu = true; touched++ }
                             ChoiMenu(speedMenu, { speedMenu = false }) {
                                 SPEEDS.forEach { v ->
-                                    DropdownMenuItem(
-                                        text = { Text((if (v == 1f) "1x" else "${v}x") + if (v < 1f) "  " + stringResource(R.string.vp_slow) else "") },
-                                        onClick = { setSpeed(v); speedMenu = false },
-                                        trailingIcon = { if (v == speed) Icon(Icons.Default.Check, null, Modifier.size(IconSize.sm)) },
+                                    ChoiMenuItem(
+                                        (if (v == 1f) "1x" else "${v}x") + if (v < 1f) "  " + stringResource(R.string.vp_slow) else "",
+                                        { setSpeed(v); speedMenu = false },
+                                        checked = v == speed,
                                     )
                                 }
                             }
@@ -793,11 +793,7 @@ fun VideoPlayer(
                             IconPill(Icons.Default.AspectRatio, fitLabels.getValue(fit), active = fit != VideoFit.FIT || zoom.scale > 1.01f) { fitMenu = true; touched++ }
                             ChoiMenu(fitMenu, { fitMenu = false }) {
                                 VideoFit.entries.forEach { f ->
-                                    DropdownMenuItem(
-                                        text = { Text(fitLabels.getValue(f)) },
-                                        onClick = { setFit(f); fitMenu = false },
-                                        trailingIcon = { if (f == fit) Icon(Icons.Default.Check, null, Modifier.size(IconSize.sm)) },
-                                    )
+                                    ChoiMenuItem(fitLabels.getValue(f), { setFit(f); fitMenu = false }, checked = f == fit)
                                 }
                             }
                         }
@@ -824,29 +820,20 @@ fun VideoPlayer(
                         Box {
                             IconPill(Icons.Default.MoreHoriz, stringResource(R.string.more)) { more = true; touched++ }
                             ChoiMenu(more, { more = false }) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.vp_step, step)) },
-                                    onClick = {
-                                        step = STEPS[(STEPS.indexOf(step) + 1) % STEPS.size]
-                                        prefs.videoStep = step
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.vp_subtitle_size, VideoMath.percent(subtitleScale))) },
-                                    onClick = {
-                                        subtitleScale = SUBTITLE_SCALES[(SUBTITLE_SCALES.indexOf(subtitleScale) + 1).mod(SUBTITLE_SCALES.size)]
-                                        prefs.subtitleScale = subtitleScale
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.vp_rotate)) },
-                                    leadingIcon = { Icon(Icons.Default.ScreenRotation, null, Modifier.size(IconSize.md)) },
-                                    onClick = { rotate(); more = false },
-                                )
-                                HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.vp_gesture_help), style = MaterialTheme.typography.bodySmall) },
-                                    onClick = { more = false },
+                                ChoiMenuItem(stringResource(R.string.vp_step, step), {
+                                    step = STEPS[(STEPS.indexOf(step) + 1) % STEPS.size]
+                                    prefs.videoStep = step
+                                })
+                                ChoiMenuItem(stringResource(R.string.vp_subtitle_size, VideoMath.percent(subtitleScale)), {
+                                    subtitleScale = SUBTITLE_SCALES[(SUBTITLE_SCALES.indexOf(subtitleScale) + 1).mod(SUBTITLE_SCALES.size)]
+                                    prefs.subtitleScale = subtitleScale
+                                })
+                                ChoiMenuItem(stringResource(R.string.vp_rotate), { rotate(); more = false }, icon = Icons.Default.ScreenRotation)
+                                ChoiMenuDivider()
+                                Text(
+                                    stringResource(R.string.vp_gesture_help),
+                                    Modifier.padding(horizontal = Space.lg, vertical = Space.sm),
+                                    style = MaterialTheme.typography.bodySmall, color = ChoiTheme.colors.mutedForeground,
                                 )
                             }
                         }

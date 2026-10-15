@@ -400,24 +400,23 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
         s.copy(tabs = s.tabs.mapAt(s.current) { it.at(path) }, selection = emptySet())
     }
 
-    fun up(): Boolean {
-        val path = _state.value.tab.path
-        when (kindOfPath(path)) {
-            LocationKind.REMOTE -> {
-                val p = RemoteLocation.pathOf(path)
-                if (p == "/") openDir(rootPath) else openDir(RemoteLocation.make(RemoteLocation.connectionOf(path), RemotePaths.parent(p)))
-                return true
-            }
-            LocationKind.ARCHIVE -> {
-                val archive = ArchiveLocation.archiveOf(path)
-                val inner = ArchiveLocation.innerOf(path)
-                if (inner.isEmpty()) File(archive).parent?.let(::openDir) else openDir(ArchiveLocation.make(archive, inner.substringBeforeLast('/', "")))
-                return true
-            }
-            LocationKind.LOCAL -> Unit
+    /** Where "up" leads from [path]: the parent folder, the archive's folder, or the device root; null at the root. */
+    fun parentPath(path: String): String? = when (kindOfPath(path)) {
+        LocationKind.REMOTE -> {
+            val p = RemoteLocation.pathOf(path)
+            if (p == "/") rootPath else RemoteLocation.make(RemoteLocation.connectionOf(path), RemotePaths.parent(p))
         }
-        if (path == rootPath) return false
-        File(path).parent?.let(::openDir)
+        LocationKind.ARCHIVE -> {
+            val archive = ArchiveLocation.archiveOf(path)
+            val inner = ArchiveLocation.innerOf(path)
+            if (inner.isEmpty()) File(archive).parent else ArchiveLocation.make(archive, inner.substringBeforeLast('/', ""))
+        }
+        LocationKind.LOCAL -> if (path == rootPath) null else File(path).parent
+    }
+
+    fun up(): Boolean {
+        val parent = parentPath(_state.value.tab.path) ?: return false
+        openDir(parent)
         return true
     }
 
@@ -947,7 +946,8 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun tabLabel(path: String): String = when (kindOfPath(path)) {
-        LocationKind.LOCAL -> File(path).name.ifEmpty { "/" }
+        // The storage root's own name is just "0" (/storage/emulated/0); call it what the drawer calls it.
+        LocationKind.LOCAL -> if (path == rootPath) getApplication<Application>().getString(R.string.drawer_internal) else File(path).name.ifEmpty { "/" }
         LocationKind.REMOTE -> displayPath(path).substringBefore(':')
         LocationKind.ARCHIVE -> File(ArchiveLocation.archiveOf(path)).name
     }

@@ -20,8 +20,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -99,7 +99,7 @@ fun OpenWithSheet(
                 if (builtInLabel != null) {
                     item {
                         OpenRow(
-                            icon = { Box(Modifier.size(36.dp).clip(RoundedCornerShape(Radius.lg)).background(c.primary), contentAlignment = Alignment.Center) { Icon(Icons.Default.AutoAwesome, null, Modifier.size(IconSize.md), tint = c.primaryForeground) } },
+                            icon = { Box(Modifier.size(36.dp).clip(RoundedCornerShape(Radius.lg)).background(c.primary), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(IconSize.md), tint = c.primaryForeground) } },
                             title = stringResource(builtInLabel),
                             subtitle = stringResource(R.string.ow_builtin_sub),
                             selected = current == OpenChoice.BuiltIn,
@@ -160,7 +160,7 @@ private fun OpenRow(icon: @Composable () -> Unit, title: String, subtitle: Strin
         if (selected) {
             Box(Modifier.border(Hairline, c.border, RoundedCornerShape(Radius.md)).padding(horizontal = Space.sm, vertical = Space.xxs)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Check, null, Modifier.size(IconSize.xs), tint = c.mutedForeground)
+                    Icon(Icons.Outlined.Check, null, Modifier.size(IconSize.xs), tint = c.mutedForeground)
                     Spacer(Modifier.width(Space.xs))
                     Text(stringResource(R.string.ow_default), style = MaterialTheme.typography.labelSmall, color = c.mutedForeground)
                 }

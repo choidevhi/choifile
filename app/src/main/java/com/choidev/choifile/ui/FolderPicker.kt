@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBackIos
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,7 +49,7 @@ fun FolderPickerDialog(rootPath: String, start: String, onPick: (String) -> Unit
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton({ File(current).parentFile?.let { current = it.absolutePath } }, enabled = current != rootPath) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.up))
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBackIos, stringResource(R.string.up))
                     }
                     Text(current.removePrefix(rootPath).ifEmpty { "/" }, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.StartEllipsis, style = MaterialTheme.typography.bodyMedium)
                 }
@@ -58,7 +58,7 @@ fun FolderPickerDialog(rootPath: String, start: String, onPick: (String) -> Unit
                     items(children, key = { it.path }) { f ->
                         ListItem(
                             modifier = Modifier.clickable { current = f.absolutePath },
-                            leadingContent = { Icon(Icons.Default.Folder, null, tint = MaterialTheme.colorScheme.primary) },
+                            leadingContent = { Icon(Icons.Filled.Folder, null, tint = MaterialTheme.colorScheme.primary) },
                             headlineContent = { Text(f.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         )
                     }

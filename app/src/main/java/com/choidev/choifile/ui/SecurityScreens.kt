@@ -23,15 +23,14 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.automirrored.outlined.ArrowBackIos
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -90,7 +89,7 @@ fun LockedView(subtitle: Int, modifier: Modifier = Modifier, autoPrompt: Boolean
             Modifier.size(56.dp).border(Hairline, c.border, RoundedCornerShape(Radius.xl)).background(c.muted, RoundedCornerShape(Radius.xl)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Default.Lock, null, Modifier.size(IconSize.lg), tint = c.foreground)
+            Icon(Icons.Outlined.Lock, null, Modifier.size(IconSize.lg), tint = c.foreground)
         }
         Spacer(Modifier.height(Space.lg))
         Text(stringResource(R.string.locked_title), style = MaterialTheme.typography.titleLarge)
@@ -154,14 +153,14 @@ fun SettingsScreen(
     Scaffold(topBar = {
         ChoiTopBar(
             title = { Text(stringResource(R.string.settings)) },
-            navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
+            navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBackIos, stringResource(R.string.back)) } },
         )
     }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {
             item {
                 SectionLabel(stringResource(R.string.settings_section_security))
                 ChoiCard(cardModifier) {
-                    SettingRow(stringResource(R.string.setting_app_lock), stringResource(R.string.setting_app_lock_desc)) { Switch(appLock, onAppLock) }
+                    SettingRow(stringResource(R.string.setting_app_lock), stringResource(R.string.setting_app_lock_desc)) { ChoiSwitch(appLock, onAppLock) }
                     HorizontalDivider(Modifier.padding(vertical = Space.md), thickness = Hairline, color = c.border)
                     Text(stringResource(R.string.setting_grace), style = MaterialTheme.typography.titleSmall)
                     Spacer(Modifier.height(Space.xxs))
@@ -297,7 +296,7 @@ fun VaultScreen(vm: BrowserViewModel, onBack: () -> Unit) {
     Scaffold(topBar = {
         ChoiTopBar(
             title = { Text(stringResource(R.string.hidden_items)) },
-            navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
+            navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBackIos, stringResource(R.string.back)) } },
         )
     }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {

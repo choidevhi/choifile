@@ -25,7 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBackIos
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -133,7 +133,7 @@ fun ComicScreen(location: String, onClose: () -> Unit) {
             Surface(color = c.background.copy(alpha = 0.92f), contentColor = c.foreground) {
                 Column(Modifier.statusBarsPadding()) {
                     androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = Space.xs), verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+                        IconButton(onClose) { Icon(Icons.AutoMirrored.Outlined.ArrowBackIos, stringResource(R.string.back)) }
                         Text(d?.book?.title ?: "", Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.width(Space.md))
                     }

@@ -15,11 +15,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.outlined.ArrowBackIos
+import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -87,14 +87,14 @@ fun SearchScreen(vm: BrowserViewModel, rootPath: String, onOpenFolder: (String) 
     Scaffold { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+                IconButton(onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBackIos, stringResource(R.string.back)) }
                 OutlinedTextField(
                     q.text, { vm.search.setQuery(q.copy(text = it)) },
                     Modifier.weight(1f).padding(end = 8.dp),
                     singleLine = true,
                     placeholder = { Text(stringResource(if (q.content) R.string.search_hint_content else R.string.search_hint)) },
                     trailingIcon = {
-                        if (q.text.isNotEmpty()) IconButton({ vm.search.setQuery(q.copy(text = "")) }) { Icon(Icons.Default.Close, stringResource(R.string.close)) }
+                        if (q.text.isNotEmpty()) IconButton({ vm.search.setQuery(q.copy(text = "")) }) { Icon(Icons.Outlined.Close, stringResource(R.string.close)) }
                     },
                 )
             }
@@ -132,7 +132,7 @@ fun SearchScreen(vm: BrowserViewModel, rootPath: String, onOpenFolder: (String) 
                     saved.forEach { s ->
                         InputChip(
                             false, { vm.search.setQuery(s.query) }, { Text(s.name) },
-                            trailingIcon = { Icon(Icons.Default.Close, stringResource(R.string.delete), Modifier.size(16.dp).clickable { vm.search.deleteSaved(s.name) }) },
+                            trailingIcon = { Icon(Icons.Outlined.Close, stringResource(R.string.delete), Modifier.size(16.dp).clickable { vm.search.deleteSaved(s.name) }) },
                         )
                     }
                 }
@@ -146,7 +146,7 @@ fun SearchScreen(vm: BrowserViewModel, rootPath: String, onOpenFolder: (String) 
                     Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (state.indexing || state.searching) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                else IconButton(vm.search::reindex) { Icon(Icons.Default.Refresh, stringResource(R.string.index_refresh)) }
+                else IconButton(vm.search::reindex) { Icon(Icons.Outlined.Refresh, stringResource(R.string.index_refresh)) }
             }
             HorizontalDivider()
 
@@ -159,7 +159,7 @@ fun SearchScreen(vm: BrowserViewModel, rootPath: String, onOpenFolder: (String) 
                         val item = hit.item
                         ListItem(
                             modifier = Modifier.clickable { if (item.isDirectory) onOpenFolder(item.path) else onOpenFile(item) },
-                            leadingContent = { Icon(if (item.isDirectory) Icons.Default.Folder else Icons.AutoMirrored.Filled.InsertDriveFile, null) },
+                            leadingContent = { Icon(if (item.isDirectory) Icons.Filled.Folder else Icons.AutoMirrored.Outlined.InsertDriveFile, null) },
                             headlineContent = { Text(item.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             supportingContent = {
                                 Column {

@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -42,7 +42,7 @@ fun PermissionScreen(onRequestLegacy: () -> Unit) {
                 .background(c.muted, androidx.compose.foundation.shape.RoundedCornerShape(Radius.xl))
                 .border(Hairline, c.border, androidx.compose.foundation.shape.RoundedCornerShape(Radius.xl)),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Default.FolderOpen, null, Modifier.size(28.dp), tint = c.foreground) }
+        ) { Icon(Icons.Outlined.FolderOpen, null, Modifier.size(28.dp), tint = c.foreground) }
         Spacer(Modifier.height(Space.xl))
         Text(stringResource(R.string.perm_title), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
         Spacer(Modifier.height(Space.sm))

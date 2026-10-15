@@ -17,12 +17,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.automirrored.outlined.ArrowBackIos
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -37,7 +37,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -82,14 +81,14 @@ fun ConnectionsScreen(vm: BrowserViewModel, onOpened: () -> Unit, onBack: () -> 
     Scaffold(topBar = {
         ChoiTopBar(
             title = { Text(stringResource(R.string.connections)) },
-            navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
+            navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBackIos, stringResource(R.string.back)) } },
             actions = {
-                IconButton({ editing = newConnection() }) { Icon(Icons.Default.Add, stringResource(R.string.conn_add)) }
+                IconButton({ editing = newConnection() }) { Icon(Icons.Outlined.Add, stringResource(R.string.conn_add)) }
                 Box {
-                    IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.more)) }
+                    IconButton({ menu = true }) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.more)) }
                     ChoiMenu(menu, { menu = false }) {
-                        DropdownMenuItem({ Text(stringResource(R.string.ts_preset)) }, { menu = false; preset = true })
-                        DropdownMenuItem({ Text(stringResource(R.string.ts_api_key_title)) }, { menu = false; apiKeyDialog = true })
+                        ChoiMenuItem(stringResource(R.string.ts_preset), { menu = false; preset = true })
+                        ChoiMenuItem(stringResource(R.string.ts_api_key_title), { menu = false; apiKeyDialog = true })
                     }
                 }
             },
@@ -108,13 +107,13 @@ fun ConnectionsScreen(vm: BrowserViewModel, onOpened: () -> Unit, onBack: () -> 
             items(connections, key = { it.id }) { c ->
                 ListItem(
                     modifier = Modifier.clickable { vm.openConnection(c.id); onOpened() },
-                    leadingContent = { Icon(Icons.Default.Cloud, null) },
+                    leadingContent = { Icon(Icons.Outlined.Cloud, null) },
                     headlineContent = { Text(c.name) },
                     supportingContent = { Text("${c.protocol.label} · ${c.host}:${c.port}" + if (c.tailscale) " · Tailscale" else "") },
                     trailingContent = {
                         Row {
-                            IconButton({ editing = c }) { Icon(Icons.Default.Edit, stringResource(R.string.edit)) }
-                            IconButton({ deleting = c }) { Icon(Icons.Default.DeleteOutline, stringResource(R.string.delete)) }
+                            IconButton({ editing = c }) { Icon(Icons.Outlined.Edit, stringResource(R.string.edit)) }
+                            IconButton({ deleting = c }) { Icon(Icons.Outlined.DeleteOutline, stringResource(R.string.delete)) }
                         }
                     },
                 )
@@ -182,7 +181,7 @@ private fun ConnectionEditor(vm: BrowserViewModel, initial: ConnectionConfig, is
                     Field(c.basePath, { c = c.copy(basePath = it) }, R.string.conn_base_path)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(stringResource(if (c.protocol == Protocol.WEBDAV) R.string.conn_https else R.string.conn_ftps), Modifier.weight(1f))
-                        Switch(c.useTls, { on ->
+                        ChoiSwitch(c.useTls, { on ->
                             val old = defaultPortFor(c.protocol, c.useTls)
                             c = c.copy(useTls = on)
                             if (portText.toIntOrNull() == old) portText = defaultPortFor(c.protocol, on).toString()

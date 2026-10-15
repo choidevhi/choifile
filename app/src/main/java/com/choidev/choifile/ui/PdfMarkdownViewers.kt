@@ -29,10 +29,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -179,13 +179,13 @@ fun PdfViewer(file: File) {
         if (errorRes == 0 && pageCount > 0) {
             Surface(tonalElevation = 3.dp) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton({ page = (page - 1).coerceAtLeast(0) }, enabled = page > 0) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.pdf_prev)) }
+                    IconButton({ page = (page - 1).coerceAtLeast(0) }, enabled = page > 0) { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, stringResource(R.string.pdf_prev)) }
                     GhostButton({ jump = true }) { Text(stringResource(R.string.pdf_page_of, page + 1, pageCount)) }
-                    IconButton({ page = (page + 1).coerceAtMost(pageCount - 1) }, enabled = page < pageCount - 1) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.pdf_next)) }
+                    IconButton({ page = (page + 1).coerceAtMost(pageCount - 1) }, enabled = page < pageCount - 1) { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, stringResource(R.string.pdf_next)) }
                     Box(Modifier.weight(1f))
-                    IconButton({ zoom(scale - 0.5f) }, enabled = scale > 1f) { Icon(Icons.Default.Remove, stringResource(R.string.pdf_zoom_out)) }
+                    IconButton({ zoom(scale - 0.5f) }, enabled = scale > 1f) { Icon(Icons.Outlined.Remove, stringResource(R.string.pdf_zoom_out)) }
                     Text("${(scale * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
-                    IconButton({ zoom(scale + 0.5f) }, enabled = scale < 5f) { Icon(Icons.Default.Add, stringResource(R.string.pdf_zoom_in)) }
+                    IconButton({ zoom(scale + 0.5f) }, enabled = scale < 5f) { Icon(Icons.Outlined.Add, stringResource(R.string.pdf_zoom_in)) }
                 }
             }
         }
