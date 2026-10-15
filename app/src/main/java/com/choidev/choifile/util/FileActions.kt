@@ -15,13 +15,15 @@ import androidx.core.content.FileProvider
 import com.choidev.choifile.R
 import java.io.File
 
-enum class FileKind { IMAGE, VIDEO, TEXT, PDF, MARKDOWN, OTHER }
+enum class FileKind { IMAGE, VIDEO, AUDIO, TEXT, PDF, MARKDOWN, OTHER }
 
 private val imageExt = setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif", "avif")
 /** Containers the built-in player (Media3 extractors + FFmpeg decoders) opens. */
 private val videoExt = setOf(
-    "mp4", "m4v", "mov", "3gp", "3g2", "f4v", "mkv", "webm", "avi", "ts", "flv", "ogv", "ogg", "mpg", "mpeg",
+    "mp4", "m4v", "mov", "3gp", "3g2", "f4v", "mkv", "webm", "avi", "ts", "flv", "ogv", "mpg", "mpeg",
 )
+/** Audio the built-in music player opens (Media3 extractors; FFmpeg for codecs the device lacks). */
+private val audioExt = setOf("mp3", "m4a", "m4b", "aac", "flac", "wav", "ogg", "oga", "opus", "amr", "mka", "3ga")
 val codeExt = setOf(
     "kt", "kts", "java", "js", "ts", "py", "c", "cpp", "h", "hpp", "cs", "go", "rs", "swift",
     "sh", "gradle", "json", "xml", "html", "css", "yml", "yaml", "toml", "sql", "php", "rb",
@@ -33,6 +35,7 @@ fun File.extensionLower(): String = extension.lowercase()
 fun kindOf(file: File): FileKind = when (file.extensionLower()) {
     in imageExt -> FileKind.IMAGE
     in videoExt -> FileKind.VIDEO
+    in audioExt -> FileKind.AUDIO
     "pdf" -> FileKind.PDF
     "md", "markdown" -> FileKind.MARKDOWN
     in codeExt, in plainExt -> FileKind.TEXT

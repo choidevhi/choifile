@@ -11,8 +11,8 @@ android {
         applicationId = "com.choidev.choifile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.5.1"
+        versionCode = 11
+        versionName = "0.6.0"
         // -Pchoifile.abi=arm64-v8a builds a single-ABI APK (smaller download for phones).
         providers.gradleProperty("choifile.abi").orNull?.let { ndk { abiFilters += it.split(",") } }
     }
@@ -33,6 +33,12 @@ android {
             isMinifyEnabled = false
             if (releaseStore != null) signingConfig = signingConfigs.getByName("release")
         }
+    }
+    // Lists the app's languages (values, values-ko, values-ja) for Android 13's per-app language setting.
+    androidResources {
+        generateLocaleConfig = true
+        // Only the languages the app is translated into (libraries bring dozens more).
+        localeFilters += listOf("en", "ko", "ja")
     }
     packaging {
         // The FFmpeg libraries are ~5.5 MB per ABI; store them compressed (extracted at install) so the
@@ -66,6 +72,7 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-video:3.3.0")
     implementation("androidx.media3:media3-exoplayer:1.8.0")
     implementation("androidx.media3:media3-ui:1.8.0")
+    implementation("androidx.media3:media3-session:1.8.0")
     // FFmpeg audio/video decoders for Media3 1.8.0 (GPL-3.0 wrapper, see THIRD_PARTY.md).
     implementation("io.github.anilbeesetti:nextlib-media3ext:1.8.0-0.9.0")
 

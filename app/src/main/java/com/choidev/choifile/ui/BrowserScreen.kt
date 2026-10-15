@@ -53,6 +53,20 @@ import com.choidev.choifile.security.isSameOrInside
 import com.choidev.choifile.storage.Favorite
 import com.choidev.choifile.storage.FavoritesStore
 import com.choidev.choifile.util.VideoDurations
+import com.choidev.choifile.browser.DateRange
+import com.choidev.choifile.browser.FileFilter
+import com.choidev.choifile.browser.SizeRange
+import com.choidev.choifile.browser.TypeGroup
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.material.icons.outlined.Cancel
+import androidx.compose.material.icons.outlined.FilterAlt
+import androidx.compose.material.icons.filled.FilterAlt
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import com.choidev.choifile.playback.AudioPlayback
 import com.choidev.choifile.util.formatDuration
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.horizontalScroll
@@ -116,6 +130,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SelectAll
@@ -234,6 +249,7 @@ fun BrowserScreen(
     onOpenConnections: () -> Unit,
     onOpenComic: (String) -> Unit,
     onOpenWith: (String) -> Unit,
+    onOpenNowPlaying: () -> Unit,
     onOpenTool: (ToolScreen) -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -261,10 +277,13 @@ fun BrowserScreen(
     val layer = rememberGraphicsLayer()
     val backdrop = remember(layer) { GlassBackdrop(layer) }
     var topPx by remember { mutableIntStateOf(0) }
+    var filterOpen by remember { mutableStateOf(false) }
     // iOS large title: shown at the top of a folder, folded into the bar once the list scrolls.
     var collapsed by remember { mutableStateOf(false) }
     LaunchedEffect(state.tab.path, state.current) { collapsed = false }
     var bottomPx by remember { mutableIntStateOf(0) }
+    var miniPx by remember { mutableIntStateOf(0) }
+    val music by AudioPlayback.state.collectAsStateWithLifecycle()
 
     val undoLabel = stringResource(R.string.undo)
     LaunchedEffect(Unit) {
@@ -301,10 +320,17 @@ fun BrowserScreen(
     }
 
     val bottomBarVisible = state.selection.isNotEmpty() || state.clipboard != null
+    val miniVisible = music.current != null && !bottomBarVisible
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    // What sits over the bottom of the list: the selection/paste bar, else the mini player, else just the nav bar.
+    val bottomCover = when {
+        bottomBarVisible -> with(density) { bottomPx.toDp() }
+        miniVisible -> navInset + with(density) { miniPx.toDp() } + Space.sm
+        else -> navInset
+    }
     val padding = PaddingValues(
         top = with(density) { topPx.toDp() } + Space.xs,
-        bottom = if (bottomBarVisible) with(density) { bottomPx.toDp() } + Space.xs else navInset + Space.sm,
+        bottom = bottomCover + Space.sm,
     )
 
     // Swiping the list sideways moves between tabs; the tab strip and the view model follow the settled page.
@@ -391,12 +417,21 @@ fun BrowserScreen(
         GlassSurface(backdrop, Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { topPx = it.height }, GlassEdge.TOP) {
             Column(Modifier.statusBarsPadding()) {
                 if (state.selection.isEmpty()) {
-                    NavRow(state, atRoot, collapsed, vm, favorites, onMenu = { scope.launch { drawerState.open() } }, onOpenComic = onOpenComic) { dialog = it }
+                    NavRow(
+                        state, atRoot, collapsed, vm, favorites,
+                        onMenu = { scope.launch { drawerState.open() } },
+                        onFilter = { filterOpen = !filterOpen },
+                        onOpenComic = onOpenComic,
+                    ) { dialog = it }
                 } else {
                     SelectionRow(state, entries.size, vm)
                 }
                 AnimatedVisibility(state.selection.isEmpty() && !collapsed, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                     LargeTitle(vm.tabLabel(state.tab.path), vm.displayPath(state.tab.path))
+                }
+                AnimatedVisibility(state.selection.isEmpty() && (filterOpen || state.tab.filter.active), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                    val here = listing?.takeIf { it.path == state.tab.path }
+                    FilterBar(state.tab.filter, here?.items?.size ?: 0, here?.unfiltered ?: 0, vm::setFilter)
                 }
                 TabStrip(state, vm)
             }
@@ -440,13 +475,17 @@ fun BrowserScreen(
             }
         }
 
+        if (miniVisible) {
+            MiniPlayer(onOpenNowPlaying, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = Space.sm).onSizeChanged { miniPx = it.height })
+        }
+
         transfer?.let { t ->
-            TransferBar(t, vm::cancelTransfer, Modifier.align(Alignment.BottomCenter).padding(bottom = (if (bottomBarVisible) with(density) { bottomPx.toDp() } else navInset) + Space.xs))
+            TransferBar(t, vm::cancelTransfer, Modifier.align(Alignment.BottomCenter).padding(bottom = bottomCover + Space.xs))
         }
 
         SnackbarHost(
             snackbar,
-            Modifier.align(Alignment.BottomCenter).padding(bottom = if (bottomBarVisible) with(density) { bottomPx.toDp() } else navInset),
+            Modifier.align(Alignment.BottomCenter).padding(bottom = bottomCover),
         ) { data ->
             // An iOS-style toast: a dark rounded capsule with the action in the tint.
             Snackbar(
@@ -580,7 +619,7 @@ private fun TabPage(
                     Icon(Icons.Filled.Folder, null, Modifier.size(56.dp), tint = c.secondary)
                     Spacer(Modifier.height(Space.md))
                     Text(
-                        (if (data.error) listError else null) ?: stringResource(R.string.empty_folder),
+                        (if (data.error) listError else null) ?: stringResource(if (tab.filter.active) R.string.filter_no_match else R.string.empty_folder),
                         Modifier.padding(horizontal = Space.xl), textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.titleMedium,
                         color = if (data.error) c.destructive else c.mutedForeground,
@@ -924,6 +963,7 @@ private fun FileThumb(item: FileItem, modifier: Modifier, large: Boolean, privat
         val icon: ImageVector = when (kind) {
             null -> Icons.Filled.Folder
             FileKind.VIDEO -> Icons.Outlined.Movie
+            FileKind.AUDIO -> Icons.Outlined.MusicNote
             FileKind.TEXT, FileKind.MARKDOWN -> Icons.Outlined.Description
             FileKind.PDF -> Icons.Outlined.PictureAsPdf
             else -> if (ArchiveFormat.detect(item.name) != null) Icons.Outlined.FolderZip else Icons.AutoMirrored.Outlined.InsertDriveFile
@@ -950,13 +990,13 @@ private fun NavRow(
     vm: BrowserViewModel,
     favorites: List<Favorite>,
     onMenu: () -> Unit,
+    onFilter: () -> Unit,
     onOpenComic: (String) -> Unit,
     onDialog: (DialogState) -> Unit,
 ) {
     val path = state.tab.path
     val kind = kindOfPath(path)
     val c = ChoiTheme.colors
-    var sortMenu by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxWidth().height(48.dp)) {
         CompositionLocalProvider(LocalContentColor provides c.primary) {
@@ -968,25 +1008,26 @@ private fun NavRow(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBackIos, stringResource(R.string.up), Modifier.size(IconSize.md))
-                        Text(
-                            vm.parentPath(path)?.let(vm::tabLabel).orEmpty(), Modifier.widthIn(max = 104.dp),
-                            maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge,
-                        )
+                        if (!collapsed) {
+                            Text(
+                                vm.parentPath(path)?.let(vm::tabLabel).orEmpty(), Modifier.widthIn(max = 104.dp),
+                                maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge,
+                            )
+                        }
                     }
                 }
             }
             Row(Modifier.align(Alignment.CenterEnd).padding(end = Space.xs), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(vm::toggleGrid) {
-                    Icon(if (state.tab.grid) Icons.AutoMirrored.Outlined.ViewList else Icons.Outlined.GridView, stringResource(if (state.tab.grid) R.string.view_list else R.string.view_grid), Modifier.size(IconSize.lg))
-                }
-                Box {
-                    IconButton({ sortMenu = true }) { Icon(Icons.AutoMirrored.Outlined.Sort, stringResource(R.string.sort), Modifier.size(IconSize.lg)) }
-                    ChoiMenu(sortMenu, { sortMenu = false }) {
-                        listOf(SortKey.NAME to R.string.sort_name, SortKey.SIZE to R.string.sort_size, SortKey.DATE to R.string.sort_date).forEach { (key, label) ->
-                            ChoiMenuItem(stringResource(label), { vm.setSort(key); sortMenu = false }, checked = state.sort == key)
+                IconButton(onFilter) {
+                    Box {
+                        Icon(if (state.tab.filter.active) Icons.Filled.FilterAlt else Icons.Outlined.FilterAlt, stringResource(R.string.filter), Modifier.size(IconSize.lg))
+                        val n = state.tab.filter.count
+                        if (n > 0) {
+                            Box(
+                                Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-4).dp).size(16.dp).background(c.destructive, CircleShape),
+                                contentAlignment = Alignment.Center,
+                            ) { Text("$n", color = Color.White, style = MaterialTheme.typography.labelSmall) }
                         }
-                        ChoiMenuDivider()
-                        ChoiMenuItem(stringResource(R.string.sort_ascending), { vm.toggleAscending(); sortMenu = false }, checked = state.ascending)
                     }
                 }
                 Box {
@@ -999,6 +1040,26 @@ private fun NavRow(
                     // Short on purpose: things to do with this folder. Places and tools live in the drawer.
                     ChoiMenu(moreMenu, { moreMenu = false }) {
                         @Composable fun item(label: Int, icon: ImageVector? = null, action: () -> Unit) = ChoiMenuItem(stringResource(label), { moreMenu = false; action() }, icon = icon)
+                        // View: icons or list (remembered for this folder).
+                        ChoiMenuItem(stringResource(R.string.view_grid), { if (!state.tab.grid) vm.toggleGrid(); moreMenu = false }, icon = if (state.tab.grid) null else Icons.Outlined.GridView, checked = state.tab.grid)
+                        ChoiMenuItem(stringResource(R.string.view_list), { if (state.tab.grid) vm.toggleGrid(); moreMenu = false }, icon = if (!state.tab.grid) null else Icons.AutoMirrored.Outlined.ViewList, checked = !state.tab.grid)
+                        ChoiMenuDivider()
+                        // Sort: the current key carries a direction chevron; picking it again flips the order.
+                        val spec = vm.effectiveSort(state)
+                        listOf(SortKey.NAME to R.string.sort_name, SortKey.DATE to R.string.sort_date, SortKey.SIZE to R.string.sort_size, SortKey.TYPE to R.string.sort_type).forEach { (key, label) ->
+                            val on = spec.key == key
+                            ChoiMenuItem(
+                                stringResource(label), { vm.pickSort(key) },
+                                icon = if (on) (if (spec.ascending) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown) else null,
+                                subtitle = if (on) stringResource(sortDirectionLabel(key, spec.ascending)) else null,
+                            )
+                        }
+                        ChoiMenuItem(stringResource(R.string.sort_folders_first), { vm.toggleFoldersFirst() }, checked = spec.foldersFirst)
+                        ChoiMenuItem(
+                            stringResource(R.string.sort_this_folder), { vm.setFolderSort(state.tab.sort == null) }, checked = state.tab.sort != null,
+                            subtitle = stringResource(if (state.tab.sort != null) R.string.sort_this_folder_on else R.string.sort_this_folder_off),
+                        )
+                        ChoiMenuDivider()
                         val local = kind == LocationKind.LOCAL
                         val hasNoMedia = remember(moreMenu, path) { local && vm.hasNoMedia(path) }
                         if (kind != LocationKind.ARCHIVE) {
@@ -1039,10 +1100,16 @@ private fun NavRow(
                 }
             }
         }
-        AnimatedVisibility(collapsed, Modifier.align(Alignment.Center).widthIn(max = 168.dp), enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(collapsed, Modifier.align(Alignment.Center).widthIn(max = 150.dp), enter = fadeIn(), exit = fadeOut()) {
             Text(vm.tabLabel(path), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
         }
     }
+}
+
+private fun sortDirectionLabel(key: SortKey, ascending: Boolean) = when (key) {
+    SortKey.NAME, SortKey.TYPE -> if (ascending) R.string.sort_dir_az else R.string.sort_dir_za
+    SortKey.DATE -> if (ascending) R.string.sort_dir_oldest else R.string.sort_dir_newest
+    SortKey.SIZE -> if (ascending) R.string.sort_dir_smallest else R.string.sort_dir_largest
 }
 
 /** The folder's name in Large Title size with its path under it; scrolls away into [NavRow]. */
@@ -1055,6 +1122,112 @@ private fun LargeTitle(title: String, subtitle: String) {
 }
 
 /** iOS edit-mode bar: select all (or none) on the left, the count in the middle, Done on the right. */
+/**
+ * The filter for the open folder: a search field (plain text, `*`/`?` wildcards, Korean initial consonants) and
+ * chips for kinds, last-modified date and size. Shown while open or while any filter is set.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FilterBar(filter: FileFilter, shown: Int, total: Int, onChange: (FileFilter) -> Unit) {
+    val c = ChoiTheme.colors
+    var dateMenu by remember { mutableStateOf(false) }
+    var sizeMenu by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = Space.lg).padding(bottom = Space.sm)) {
+        // iOS search field: a gray rounded box with a magnifier and a clear button.
+        Row(
+            Modifier.fillMaxWidth().height(38.dp).clip(RoundedCornerShape(Radius.md)).background(c.secondary).padding(horizontal = Space.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Outlined.Search, null, Modifier.size(IconSize.md), tint = c.mutedForeground)
+            Spacer(Modifier.width(Space.xs))
+            Box(Modifier.weight(1f)) {
+                if (filter.text.isEmpty()) Text(stringResource(R.string.filter_hint), color = c.mutedForeground, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                BasicTextField(
+                    filter.text, { onChange(filter.copy(text = it)) }, Modifier.fillMaxWidth(), singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.foreground),
+                    cursorBrush = SolidColor(c.primary),
+                )
+            }
+            if (filter.text.isNotEmpty()) {
+                Box(Modifier.size(28.dp).clip(CircleShape).clickable { onChange(filter.copy(text = "")) }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.Cancel, stringResource(R.string.filter_clear_text), Modifier.size(IconSize.md), tint = c.mutedForeground)
+                }
+            }
+        }
+        Spacer(Modifier.height(Space.sm))
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically) {
+            TYPE_CHIPS.forEach { (type, label) ->
+                FilterChip(stringResource(label), type in filter.types) {
+                    onChange(filter.copy(types = if (type in filter.types) filter.types - type else filter.types + type))
+                }
+            }
+            Box {
+                FilterChip(stringResource(dateLabel(filter.date)), filter.date != DateRange.ANY, dropdown = true) { dateMenu = true }
+                ChoiMenu(dateMenu, { dateMenu = false }) {
+                    DateRange.entries.forEach { d -> ChoiMenuItem(stringResource(dateLabel(d)), { onChange(filter.copy(date = d)); dateMenu = false }, checked = d == filter.date) }
+                }
+            }
+            Box {
+                FilterChip(stringResource(sizeLabel(filter.size)), filter.size != SizeRange.ANY, dropdown = true) { sizeMenu = true }
+                ChoiMenu(sizeMenu, { sizeMenu = false }) {
+                    SizeRange.entries.forEach { r -> ChoiMenuItem(stringResource(sizeLabel(r)), { onChange(filter.copy(size = r)); sizeMenu = false }, checked = r == filter.size) }
+                }
+            }
+        }
+        if (filter.active) {
+            Row(Modifier.fillMaxWidth().padding(top = Space.xs), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.filter_count, shown, total), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = c.mutedForeground)
+                GhostButton({ onChange(FileFilter()) }) { Text(stringResource(R.string.filter_reset)) }
+            }
+        }
+    }
+}
+
+private val TYPE_CHIPS = listOf(
+    TypeGroup.FOLDER to R.string.filter_type_folder,
+    TypeGroup.IMAGE to R.string.filter_type_image,
+    TypeGroup.VIDEO to R.string.filter_type_video,
+    TypeGroup.AUDIO to R.string.filter_type_audio,
+    TypeGroup.DOCUMENT to R.string.filter_type_document,
+    TypeGroup.ARCHIVE to R.string.filter_type_archive,
+    TypeGroup.APK to R.string.filter_type_apk,
+    TypeGroup.OTHER to R.string.filter_type_other,
+)
+
+private fun dateLabel(d: DateRange) = when (d) {
+    DateRange.ANY -> R.string.filter_date_any
+    DateRange.DAY -> R.string.filter_date_day
+    DateRange.WEEK -> R.string.filter_date_week
+    DateRange.MONTH -> R.string.filter_date_month
+    DateRange.YEAR -> R.string.filter_date_year
+}
+
+private fun sizeLabel(r: SizeRange) = when (r) {
+    SizeRange.ANY -> R.string.filter_size_any
+    SizeRange.SMALL -> R.string.filter_size_small
+    SizeRange.MEDIUM -> R.string.filter_size_medium
+    SizeRange.LARGE -> R.string.filter_size_large
+    SizeRange.HUGE -> R.string.filter_size_huge
+}
+
+/** Capsule filter chip: tinted when on; a small chevron when it opens a menu. */
+@Composable
+private fun FilterChip(label: String, on: Boolean, dropdown: Boolean = false, onClick: () -> Unit) {
+    val c = ChoiTheme.colors
+    Row(
+        Modifier
+            .height(32.dp)
+            .clip(CircleShape)
+            .background(if (on) c.primary else c.secondary)
+            .clickable(onClick = onClick)
+            .padding(start = Space.md, end = if (dropdown) Space.sm else Space.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = if (on) c.primaryForeground else c.foreground, maxLines = 1)
+        if (dropdown) Icon(Icons.Outlined.KeyboardArrowDown, null, Modifier.size(IconSize.sm), tint = if (on) c.primaryForeground else c.mutedForeground)
+    }
+}
+
 @Composable
 private fun SelectionRow(state: BrowserState, total: Int, vm: BrowserViewModel) {
     val c = ChoiTheme.colors

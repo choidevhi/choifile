@@ -14,13 +14,15 @@ object SubtitleText {
     val CHOICES = listOf("UTF-8", "x-windows-949", "Shift_JIS", "GB18030", "Big5", "windows-1252", "UTF-16LE")
 
     /** Short name for [CHOICES] in a menu. */
-    fun label(charset: String): String = when (charset) {
-        "x-windows-949" -> "CP949 (한국어)"
-        "Shift_JIS" -> "Shift_JIS (日本語)"
-        "GB18030" -> "GB18030 (简体中文)"
-        "Big5" -> "Big5 (繁體中文)"
-        "windows-1252" -> "Windows-1252 (서유럽)"
-        else -> charset
+    fun label(charset: String): String {
+        fun lang(locale: java.util.Locale) = locale.getDisplayName(java.util.Locale.getDefault())
+        return when (charset) {
+            "x-windows-949" -> "CP949 (${lang(java.util.Locale.KOREAN)})"
+            "Shift_JIS" -> "Shift_JIS (${lang(java.util.Locale.JAPANESE)})"
+            "GB18030" -> "GB18030 (${lang(java.util.Locale.SIMPLIFIED_CHINESE)})"
+            "Big5" -> "Big5 (${lang(java.util.Locale.TRADITIONAL_CHINESE)})"
+            else -> charset
+        }
     }
 
     /**

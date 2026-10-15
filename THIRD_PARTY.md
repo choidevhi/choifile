@@ -18,7 +18,7 @@ Licenses are listed as published by each project; check the upstream repositorie
 | SLF4J (slf4j-nop) | 2.0.17 | silences library logging (no log output at all) | MIT |
 | AndroidX (Compose, WorkManager, Biometric, Lifecycle, Core, Fragment, Activity) | see build file | UI, background index refresh | Apache-2.0 |
 | Coil | 3.3.0 | image thumbnails | Apache-2.0 |
-| AndroidX Media3 | 1.8.0 | video playback, container extractors, subtitles | Apache-2.0 |
+| AndroidX Media3 (exoplayer, ui, session) | 1.8.0 | video and music playback, container extractors, subtitle parsers, media notification | Apache-2.0 |
 | NextLib media3ext (io.github.anilbeesetti:nextlib-media3ext) | 1.8.0-0.9.0 | FFmpeg audio/video decoders for Media3 | **GPL-3.0** (see note) |
 | ↳ FFmpeg (bundled native libavcodec, libavutil, libswresample, libswscale) | 6.0 | software decoding | LGPL-3.0-or-later as built (`--enable-version3`, no `--enable-gpl`) |
 | ↳ libvpx (bundled native) | 1.13.0 | VP8 / VP9 decoding | BSD-3-Clause |
@@ -57,3 +57,7 @@ before redistributing the app commercially.
 | OkHttp MockWebServer | scripted WebDAV / Tailscale API server | Apache-2.0 |
 | sqlite-jdbc (xerial) | runs the real search-index SQL on a JVM | Apache-2.0 |
 | org.json | JSON on the JVM test classpath | JSON license (public domain style) |
+
+Added in v0.6.0: AndroidX Media3 session (above) for the music player's notification and lock screen controls. The
+built-in e-reader (`ebook/`) and its page-turn sounds (`res/raw/page_flip_*.ogg`) come from the author's own
+choireader project; the two serif fonts that project bundles are not included.

@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fonts -->
+    <string name="eb_font_system_sans">Default Sans</string>
+    <string name="eb_font_system_serif">System Serif</string>
+    <string name="eb_error_font_open">Can\'t open the font file.</string>
+    <string name="eb_error_not_font">This isn\'t a font file.</string>
+    <string name="eb_error_font_add">Couldn\'t add the font.</string>
+
+    <!-- Library -->
+    <string name="eb_untitled">Untitled</string>
+    <string name="eb_error_file_open">Can\'t open the file.</string>
+
+    <!-- Page turn modes -->
+    <string name="eb_turn_curl">Curl</string>
+    <string name="eb_turn_slide">Slide</string>
+    <string name="eb_turn_none">None</string>
+
+    <!-- Themes -->
+    <string name="eb_theme_white">Original</string>
+    <string name="eb_theme_paper">Paper</string>
+    <string name="eb_theme_calm">Calm</string>
+    <string name="eb_theme_green">Forest</string>
+    <string name="eb_theme_gray">Gray</string>
+    <string name="eb_theme_night">Night</string>
+
+    <!-- Reader -->
+    <string name="eb_bookmark_added">Bookmark Added</string>
+    <string name="eb_bookmark_removed">Bookmark Removed</string>
+    <string name="eb_bookmark_add">Add Bookmark</string>
+    <string name="eb_bookmark_remove">Remove Bookmark</string>
+    <string name="eb_paginating">Calculating pages…</string>
+    <string name="eb_paginating_progress">Calculating pages… %1$d%%</string>
+    <string name="eb_paginating_notice">Still calculating pages</string>
+    <string name="eb_first_page">This is the first page</string>
+    <string name="eb_last_page">This is the last page</string>
+    <string name="eb_library">Library</string>
+    <string name="eb_search">Search</string>
+    <string name="eb_toc">Contents</string>
+    <string name="eb_page_position">%1$d of %2$d · %3$d%%</string>
+    <string name="eb_page_label">Page %1$d</string>
+    <string name="eb_settings_button">Aa</string>
+
+    <!-- Settings sheet -->
+    <string name="eb_close">Close</string>
+    <string name="eb_view_settings">Appearance</string>
+    <string name="eb_glyph_sample">A</string>
+    <string name="eb_theme_sample">Aa</string>
+    <string name="eb_use_system_brightness">Use System Brightness</string>
+    <string name="eb_theme">Theme</string>
+    <string name="eb_font_and_layout">Font &amp; Layout</string>
+    <string name="eb_font">Font</string>
+    <string name="eb_line_spacing">Line Spacing</string>
+    <string name="eb_line_spacing_tight">Tight</string>
+    <string name="eb_line_spacing_normal">Normal</string>
+    <string name="eb_line_spacing_loose">Loose</string>
+    <string name="eb_line_spacing_very_loose">Very Loose</string>
+    <string name="eb_margins">Margins</string>
+    <string name="eb_margin_narrow">Narrow</string>
+    <string name="eb_margin_normal">Normal</string>
+    <string name="eb_margin_wide">Wide</string>
+    <string name="eb_page_turn">Page Turn</string>
+    <string name="eb_this_book">This Book</string>
+    <string name="eb_reflow">Fix Line Breaks</string>
+    <string name="eb_reflow_footer">Joins lines that break in the middle of a sentence. Applies only to this book and keeps your place.</string>
+    <string name="eb_reading">Reading</string>
+    <string name="eb_justify">Justify Text</string>
+    <string name="eb_volume_keys">Turn Pages with Volume Keys</string>
+    <string name="eb_keep_screen_on">Keep Screen On</string>
+    <string name="eb_page_sound">Page Turn Sound</string>
+    <string name="eb_tap_zones_footer">Tap the left side of the screen for the previous page, the right side for the next page, and the center for the menu.</string>
+
+    <!-- Font sheet -->
+    <string name="eb_delete">Delete</string>
+    <string name="eb_selected">Selected</string>
+    <string name="eb_add_font_file">Add Font File…</string>
+    <string name="eb_add_font_footer">Choose a TTF or OTF font file to add it to the list.</string>
+
+    <!-- Contents and bookmarks sheet -->
+    <string name="eb_bookmarks_tab">Bookmarks %1$d</string>
+    <string name="eb_toc_empty_title">No Contents Found</string>
+    <string name="eb_toc_empty_body">Contents are made from lines that look like chapter titles, such as “Chapter 1”, “Part 2” or “#12”.</string>
+    <string name="eb_bookmarks_empty_title">No Bookmarks</string>
+    <string name="eb_bookmarks_empty_body">While reading, tap the center of the screen, then tap the bookmark button at the top right.</string>
+    <string name="eb_empty_page">(Blank page)</string>
+    <string name="eb_bookmark_page_date">Page %1$s · %2$s</string>
+    <string name="eb_bookmark_date_format">MMM d</string>
+
+    <!-- Search sheet -->
+    <string name="eb_search_placeholder">Search Book</string>
+    <string name="eb_clear">Clear</string>
+    <string name="eb_searching">Searching…</string>
+    <string name="eb_no_results">No Results</string>
+    <string name="eb_results_capped">Over 500 results (showing the first 500)</string>
+    <string name="eb_results_count">%1$d found</string>
+
+    <!-- Action sheet -->
+    <string name="eb_cancel">Cancel</string>
+</resources>

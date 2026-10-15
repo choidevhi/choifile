@@ -207,10 +207,8 @@ private fun ConnectionEditor(vm: BrowserViewModel, initial: ConnectionConfig, is
         },
         confirmButton = { PrimaryButton({ onSave(built()) }, enabled = valid) { Text(stringResource(R.string.save)) } },
         dismissButton = {
-            Row {
-                GhostButton({ vm.testConnection(built()) }, enabled = valid && test != ConnectionTest.Running) { Text(stringResource(R.string.conn_test)) }
-                GhostButton(onDismiss) { Text(stringResource(R.string.cancel)) }
-            }
+            GhostButton({ vm.testConnection(built()) }, enabled = valid && test != ConnectionTest.Running) { Text(stringResource(R.string.conn_test)) }
+            GhostButton(onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }
@@ -303,10 +301,8 @@ private fun TailscaleKeyDialog(vm: BrowserViewModel, onDismiss: () -> Unit) {
         },
         confirmButton = { PrimaryButton({ vm.setTailscaleApiKey(key); onDismiss() }, enabled = key.isNotBlank()) { Text(stringResource(R.string.save)) } },
         dismissButton = {
-            Row {
-                if (keySet) GhostButton({ vm.setTailscaleApiKey(""); onDismiss() }) { Text(stringResource(R.string.ts_key_remove)) }
-                GhostButton(onDismiss) { Text(stringResource(R.string.cancel)) }
-            }
+            if (keySet) GhostButton({ vm.setTailscaleApiKey(""); onDismiss() }) { Text(stringResource(R.string.ts_key_remove)) }
+            GhostButton(onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }

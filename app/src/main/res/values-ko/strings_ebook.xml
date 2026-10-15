@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fonts -->
+    <string name="eb_font_system_sans">기본 고딕</string>
+    <string name="eb_font_system_serif">시스템 명조</string>
+    <string name="eb_error_font_open">글꼴 파일을 열 수 없어요</string>
+    <string name="eb_error_not_font">글꼴 파일이 아니에요</string>
+    <string name="eb_error_font_add">글꼴을 넣지 못했어요</string>
+
+    <!-- Library -->
+    <string name="eb_untitled">제목 없음</string>
+    <string name="eb_error_file_open">파일을 열 수 없어요</string>
+
+    <!-- Page turn modes -->
+    <string name="eb_turn_curl">책넘김</string>
+    <string name="eb_turn_slide">슬라이드</string>
+    <string name="eb_turn_none">없음</string>
+
+    <!-- Themes -->
+    <string name="eb_theme_white">기본</string>
+    <string name="eb_theme_paper">종이</string>
+    <string name="eb_theme_calm">차분</string>
+    <string name="eb_theme_green">숲</string>
+    <string name="eb_theme_gray">회색</string>
+    <string name="eb_theme_night">밤</string>
+
+    <!-- Reader -->
+    <string name="eb_bookmark_added">책갈피를 넣었어요</string>
+    <string name="eb_bookmark_removed">책갈피를 뺐어요</string>
+    <string name="eb_bookmark_add">책갈피 넣기</string>
+    <string name="eb_bookmark_remove">책갈피 빼기</string>
+    <string name="eb_paginating">쪽 계산 중…</string>
+    <string name="eb_paginating_progress">쪽 계산 중 %1$d%%</string>
+    <string name="eb_paginating_notice">쪽을 계산하고 있어요</string>
+    <string name="eb_first_page">첫 쪽이에요</string>
+    <string name="eb_last_page">마지막 쪽이에요</string>
+    <string name="eb_library">서재</string>
+    <string name="eb_search">검색</string>
+    <string name="eb_toc">목차</string>
+    <string name="eb_page_position">%1$d / %2$d 쪽 · %3$d%%</string>
+    <string name="eb_page_label">%1$d쪽</string>
+    <string name="eb_settings_button">가가</string>
+
+    <!-- Settings sheet -->
+    <string name="eb_close">닫기</string>
+    <string name="eb_view_settings">보기 설정</string>
+    <string name="eb_glyph_sample">가</string>
+    <string name="eb_theme_sample">가나</string>
+    <string name="eb_use_system_brightness">시스템 밝기 사용</string>
+    <string name="eb_theme">테마</string>
+    <string name="eb_font_and_layout">글꼴과 배치</string>
+    <string name="eb_font">글꼴</string>
+    <string name="eb_line_spacing">줄 간격</string>
+    <string name="eb_line_spacing_tight">좁게</string>
+    <string name="eb_line_spacing_normal">보통</string>
+    <string name="eb_line_spacing_loose">넓게</string>
+    <string name="eb_line_spacing_very_loose">아주 넓게</string>
+    <string name="eb_margins">여백</string>
+    <string name="eb_margin_narrow">좁게</string>
+    <string name="eb_margin_normal">보통</string>
+    <string name="eb_margin_wide">넓게</string>
+    <string name="eb_page_turn">페이지 넘김</string>
+    <string name="eb_this_book">이 책</string>
+    <string name="eb_reflow">줄바꿈 정리</string>
+    <string name="eb_reflow_footer">문장 중간에서 끊긴 줄을 이어 붙여요. 이 책에만 적용되고, 읽던 위치는 그대로예요.</string>
+    <string name="eb_reading">읽기</string>
+    <string name="eb_justify">양쪽 정렬</string>
+    <string name="eb_volume_keys">볼륨 키로 넘기기</string>
+    <string name="eb_keep_screen_on">화면 켜짐 유지</string>
+    <string name="eb_page_sound">넘기는 소리</string>
+    <string name="eb_tap_zones_footer">화면 왼쪽을 누르면 이전 쪽, 오른쪽은 다음 쪽, 가운데는 메뉴예요.</string>
+
+    <!-- Font sheet -->
+    <string name="eb_delete">삭제</string>
+    <string name="eb_selected">선택됨</string>
+    <string name="eb_add_font_file">글꼴 파일 추가…</string>
+    <string name="eb_add_font_footer">TTF·OTF 글꼴 파일을 골라 넣으면 목록에 추가돼요.</string>
+
+    <!-- Contents and bookmarks sheet -->
+    <string name="eb_bookmarks_tab">책갈피 %1$d</string>
+    <string name="eb_toc_empty_title">목차를 찾지 못했어요</string>
+    <string name="eb_toc_empty_body">\'제1장\', \'1화\', \'프롤로그\'처럼 장 제목으로 보이는 줄을 찾아 목차를 만들어요.</string>
+    <string name="eb_bookmarks_empty_title">책갈피가 없어요</string>
+    <string name="eb_bookmarks_empty_body">읽는 중에 화면 가운데를 누르고 오른쪽 위 책갈피 버튼을 누르면 넣을 수 있어요.</string>
+    <string name="eb_empty_page">(빈 쪽)</string>
+    <string name="eb_bookmark_page_date">%1$s쪽 · %2$s</string>
+    <string name="eb_bookmark_date_format">M월 d일</string>
+
+    <!-- Search sheet -->
+    <string name="eb_search_placeholder">책에서 찾기</string>
+    <string name="eb_clear">지우기</string>
+    <string name="eb_searching">찾는 중…</string>
+    <string name="eb_no_results">찾지 못했어요</string>
+    <string name="eb_results_capped">500개 넘게 찾았어요 (앞 500개)</string>
+    <string name="eb_results_count">%1$d개 찾았어요</string>
+
+    <!-- Action sheet -->
+    <string name="eb_cancel">취소</string>
+</resources>

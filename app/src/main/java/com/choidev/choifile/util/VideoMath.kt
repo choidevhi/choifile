@@ -12,6 +12,9 @@ enum class VideoFit { FIT, CROP, STRETCH, RATIO_16_9, RATIO_4_3, ORIGINAL }
 /** What happens when a video ends: play the next one in the folder, repeat it, repeat the folder, or stop. */
 enum class VideoEnd { NEXT, REPEAT_ONE, REPEAT_ALL, STOP }
 
+/** What a playing video does when the user leaves the app: a picture-in-picture window, sound only, or stop. */
+enum class VideoLeave { PIP, AUDIO, STOP }
+
 /** What a one-finger drag on the video controls, decided once the finger has moved past the touch slop. */
 enum class DragKind { SEEK, BRIGHTNESS, VOLUME }
 

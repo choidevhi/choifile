@@ -165,6 +165,11 @@ import com.choidev.choifile.util.SidecarSubtitles
 import com.choidev.choifile.util.TrackLabels
 import com.choidev.choifile.util.VideoEnd
 import com.choidev.choifile.util.VideoFit
+import com.choidev.choifile.util.VideoLeave
+import com.choidev.choifile.playback.AudioPlayback
+import com.choidev.choifile.playback.PlaybackService
+import com.choidev.choifile.playback.PlaybackSessions
+import androidx.media3.session.MediaSession
 import com.choidev.choifile.util.VideoMath
 import com.choidev.choifile.util.ZoomMath
 import com.choidev.choifile.util.kindOf
@@ -292,12 +297,14 @@ fun VideoPlayer(
     val alive = remember { booleanArrayOf(true) }
 
     var current by remember { mutableStateOf(file) }
+    var session by remember { mutableStateOf<MediaSession?>(null) } // only while sound plays on outside the app
     var lastPosition by remember { mutableLongStateOf(startMs) }
     DisposableEffect(Unit) {
         val orientation = activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         onDispose {
             alive[0] = false
             resume.put(current.path, player.currentPosition, player.duration)
+            session?.let(PlaybackSessions::remove)
             player.release()
             volume.release()
             brightness.restore()
@@ -352,6 +359,9 @@ fun VideoPlayer(
     var sleepAtEnd by remember { mutableStateOf(false) }
     var sleepMenu by remember { mutableStateOf(false) }
     var decoderMenu by remember { mutableStateOf(false) }
+    var leave by remember { mutableStateOf(prefs.videoLeave) }
+    var leaveMenu by remember { mutableStateOf(false) }
+    var askLeave by remember { mutableStateOf(false) }
 
     fun refreshNeighbours() {
         hasPrev = player.hasPreviousMediaItem()
@@ -497,14 +507,20 @@ fun VideoPlayer(
     }
 
     // ---- picture-in-picture: automatic while playing, the small window's buttons, pause when it is closed ----
-    LaunchedEffect(playing, videoSize, textureView) {
+    LaunchedEffect(playing, videoSize, textureView, leave) {
         val a = activity ?: return@LaunchedEffect
         val rect = textureView?.let { v -> android.graphics.Rect().also { v.getGlobalVisibleRect(it) } }
         val params = VideoPip.params(context, VideoPip.aspect((videoSize.width * videoSize.pixelWidthHeightRatio).toInt(), videoSize.height), rect, playing)
+        val pip = leave == null || leave == VideoLeave.PIP
+        val params2 = if (pip) params else VideoPip.params(context, null, rect, playing = false)
         VideoPip.lastParams = params
-        VideoPip.autoEnter = playing
-        runCatching { a.setPictureInPictureParams(params) }
+        VideoPip.autoEnter = playing && pip
+        runCatching { a.setPictureInPictureParams(params2) }
     }
+    // Music and a video never play over each other.
+    LaunchedEffect(Unit) { AudioPlayback.pause() }
+    // First playback ever: ask what leaving the app should do.
+    LaunchedEffect(playing) { if (playing && leave == null) askLeave = true }
     DisposableEffect(Unit) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context, intent: Intent) {
@@ -518,10 +534,19 @@ fun VideoPlayer(
         ContextCompat.registerReceiver(context, receiver, IntentFilter(VideoPip.ACTION), ContextCompat.RECEIVER_NOT_EXPORTED)
         onDispose { context.unregisterReceiver(receiver) }
     }
-    // The app went out of sight (home, another app, the PiP window closed): stop the sound too.
+    // The app went out of sight (home, another app, the PiP window closed): stop, unless the user chose to keep
+    // the sound going; then a media session gives it the notification and lock screen controls.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
-        player.pause()
         resume.put(current.path, player.currentPosition, player.duration)
+        if (leave == VideoLeave.AUDIO && player.playWhenReady) {
+            if (session == null) {
+                session = MediaSession.Builder(context, player).setId("choifile-video-" + SystemClock.uptimeMillis())
+                    .setSessionActivity(PlaybackService.sessionActivity(context)).build()
+                    .also { PlaybackSessions.add(context, it) }
+            }
+        } else {
+            player.pause()
+        }
     }
     LaunchedEffect(player, textureView) {
         val tv = textureView ?: return@LaunchedEffect
@@ -652,6 +677,8 @@ fun VideoPlayer(
         val index = old.currentMediaItemIndex
         val at = old.currentPosition
         val wasPlaying = old.playWhenReady
+        session?.let(PlaybackSessions::remove)
+        session = null
         old.release()
         software = sw
         prefs.preferSoftware = sw
@@ -1014,6 +1041,11 @@ fun VideoPlayer(
                                 }
                                 ChoiMenuItem(stringResource(R.string.vp_sleep_end), { setSleepAtEnd(); sleepMenu = false }, checked = sleepAtEnd)
                             }
+                            ChoiMenu(leaveMenu, { leaveMenu = false }) {
+                                VideoLeave.entries.forEach { l ->
+                                    ChoiMenuItem(leaveLabel(l), { leave = l; prefs.videoLeave = l; leaveMenu = false }, checked = (leave ?: VideoLeave.PIP) == l)
+                                }
+                            }
                             ChoiMenu(decoderMenu, { decoderMenu = false }) {
                                 ChoiMenuItem(stringResource(R.string.vp_decoder_hw), { setSoftware(false); decoderMenu = false }, checked = !software, subtitle = stringResource(R.string.vp_decoder_hw_desc))
                                 ChoiMenuItem(stringResource(R.string.vp_decoder_sw), { setSoftware(true); decoderMenu = false }, checked = software, subtitle = stringResource(R.string.vp_decoder_sw_desc))
@@ -1033,6 +1065,10 @@ fun VideoPlayer(
                                     },
                                 )
                                 ChoiMenuItem(
+                                    stringResource(R.string.vp_leave), { more = false; leaveMenu = true }, icon = Icons.Default.PictureInPictureAlt,
+                                    subtitle = leaveLabel(leave),
+                                )
+                                ChoiMenuItem(
                                     stringResource(R.string.vp_decoder), { more = false; decoderMenu = true }, icon = Icons.Default.Memory,
                                     subtitle = stringResource(if (software) R.string.vp_decoder_sw else R.string.vp_decoder_hw),
                                 )
@@ -1050,6 +1086,24 @@ fun VideoPlayer(
                 }
             }
         }
+    }
+
+    if (askLeave) {
+        fun answer(l: VideoLeave) {
+            leave = l
+            prefs.videoLeave = l
+            askLeave = false
+        }
+        ChoiDialog(
+            onDismissRequest = { answer(VideoLeave.PIP) },
+            title = { Text(stringResource(R.string.vp_leave_title)) },
+            text = { Text(stringResource(R.string.vp_leave_message)) },
+            confirmButton = {
+                GhostButton({ answer(VideoLeave.PIP) }) { Text(stringResource(R.string.vp_leave_pip)) }
+                GhostButton({ answer(VideoLeave.AUDIO) }) { Text(stringResource(R.string.vp_leave_audio)) }
+                GhostButton({ answer(VideoLeave.STOP) }) { Text(stringResource(R.string.vp_leave_stop)) }
+            },
+        )
     }
 
     if (trackDialog) {
@@ -1095,6 +1149,15 @@ private fun forwardIcon(step: Int) = when (step) {
     30 -> Icons.Default.Forward30
     else -> Icons.Default.Forward10
 }
+
+@Composable
+private fun leaveLabel(leave: VideoLeave?): String = stringResource(
+    when (leave ?: VideoLeave.PIP) {
+        VideoLeave.PIP -> R.string.vp_leave_pip
+        VideoLeave.AUDIO -> R.string.vp_leave_audio
+        VideoLeave.STOP -> R.string.vp_leave_stop
+    },
+)
 
 @Composable
 private fun endLabel(end: VideoEnd): String = stringResource(

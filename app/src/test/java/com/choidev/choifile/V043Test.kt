@@ -174,7 +174,7 @@ class V043Test {
     // ---- wider video containers ----
 
     @Test fun newContainersOpenInThePlayer() {
-        listOf("a.ts", "a.flv", "a.ogv", "a.ogg", "a.MPG", "a.mpeg", "a.3g2", "a.f4v", "a.mkv", "a.webm", "a.avi", "a.mov", "a.3gp")
+        listOf("a.ts", "a.flv", "a.ogv", "a.MPG", "a.mpeg", "a.3g2", "a.f4v", "a.mkv", "a.webm", "a.avi", "a.mov", "a.3gp")
             .forEach { assertEquals(it, FileKind.VIDEO, kindOf(File(it))) }
         assertEquals(FileKind.OTHER, kindOf(File("a.wmv")))
     }

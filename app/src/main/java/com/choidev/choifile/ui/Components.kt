@@ -51,6 +51,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
@@ -84,7 +89,8 @@ fun ChoiButton(
     val weight = if (alert && variant == ButtonVariant.PRIMARY || !alert && variant != ButtonVariant.GHOST) FontWeight.SemiBold else FontWeight.Normal
     Button(
         onClick = onClick,
-        modifier = modifier.heightIn(min = if (alert) 44.dp else if (compact) 34.dp else 44.dp),
+        // In an alert the button fills its whole cell, so a tap anywhere in it counts.
+        modifier = (if (alert) modifier.fillMaxWidth() else modifier).heightIn(min = if (alert) 44.dp else if (compact) 34.dp else 44.dp),
         enabled = enabled,
         shape = RoundedCornerShape(if (alert) Radius.md else Radius.lg),
         colors = ButtonDefaults.buttonColors(
@@ -146,7 +152,7 @@ fun ChoiDialog(
         ) {
             Column {
                 // Long content scrolls inside its own area; the action row below always stays on screen.
-                Column(Modifier.weight(1f, fill = false).padding(start = Space.lg, end = Space.lg, top = Space.lg + Space.xs, bottom = Space.lg)) {
+                Column(Modifier.weight(1f, fill = false).fillMaxWidth().padding(start = Space.lg, end = Space.lg, top = Space.lg + Space.xs, bottom = Space.lg)) {
                     icon?.let { Box(Modifier.align(Alignment.CenterHorizontally).padding(bottom = Space.md)) { it() } }
                     title?.let {
                         Box(Modifier.align(Alignment.CenterHorizontally)) {
@@ -164,15 +170,63 @@ fun ChoiDialog(
                 }
                 HorizontalDivider(thickness = Hairline, color = c.border)
                 CompositionLocalProvider(LocalAlertActions provides true) {
-                    FlowRow(
-                        Modifier.fillMaxWidth().padding(horizontal = Space.xs),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
+                    AlertActions(Modifier.fillMaxWidth()) {
                         dismissButton?.invoke()
                         confirmButton()
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * The action row of an iOS alert: every button gets an equal share of the width (so the whole cell is the touch
+ * target, not just the label) with a hairline between them; three or more, or labels too long for half the width,
+ * stack full width one above the other, like iOS.
+ */
+@Composable
+private fun AlertActions(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val line = ChoiTheme.colors.border
+    // What the last measure decided, for the separators drawn after it: [side by side (1/0), button count].
+    val shape = remember { intArrayOf(1, 0) }
+    Layout(
+        content = content,
+        modifier = modifier.drawWithContent {
+            drawContent()
+            val n = shape[1]
+            for (i in 1 until n) {
+                if (shape[0] == 1) {
+                    val x = size.width * i / n
+                    drawLine(line, Offset(x, 0f), Offset(x, size.height), Hairline.toPx())
+                } else {
+                    val y = size.height * i / n
+                    drawLine(line, Offset(0f, y), Offset(size.width, y), Hairline.toPx())
+                }
+            }
+        },
+    ) { measurables, constraints ->
+        val n = measurables.size
+        val width = constraints.maxWidth
+        val minHeight = 44.dp.roundToPx()
+        val sideBySide = n in 1..2 && measurables.all { it.maxIntrinsicWidth(minHeight) <= width / n }
+        shape[0] = if (sideBySide) 1 else 0
+        shape[1] = n
+        if (sideBySide) {
+            val cell = width / n
+            val placeables = measurables.mapIndexed { i, m ->
+                val w = if (i == n - 1) width - cell * (n - 1) else cell
+                m.measure(Constraints(minWidth = w, maxWidth = w, minHeight = minHeight))
+            }
+            layout(width, placeables.maxOfOrNull { it.height } ?: 0) {
+                var x = 0
+                placeables.forEach { p -> p.placeRelative(x, 0); x += p.width }
+            }
+        } else {
+            val placeables = measurables.map { it.measure(Constraints(minWidth = width, maxWidth = width, minHeight = minHeight)) }
+            layout(width, placeables.sumOf { it.height }) {
+                var y = 0
+                placeables.forEach { p -> p.placeRelative(0, y); y += p.height }
             }
         }
     }

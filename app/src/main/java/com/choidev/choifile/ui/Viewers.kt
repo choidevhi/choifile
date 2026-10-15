@@ -70,6 +70,11 @@ import com.choidev.choifile.util.kindOf
 import com.choidev.choifile.util.openWithOtherApp
 import com.choidev.choifile.util.shareFiles
 import com.choidev.choifile.util.ZoomMath
+import com.choidev.choifile.util.SubtitleText
+import com.choidev.choifile.ebook.EBOOK_DEFAULT_MIN_BYTES
+import com.choidev.choifile.ebook.EBOOK_EXTENSIONS
+import com.choidev.choifile.ebook.EbookScreen
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -95,6 +100,26 @@ fun ViewerScreen(file: File, temporary: Boolean = false, onOpenWith: ((File) -> 
 
     fun close() = if (dirty) confirmDiscard = true else onClose()
     BackHandler(onBack = ::close)
+
+    // Music from an archive or a server (a temporary copy): the app-wide player, stopped with the viewer.
+    if (kind == FileKind.AUDIO) {
+        LaunchedEffect(file) { com.choidev.choifile.playback.AudioPlayback.play(context, file, listOf(file)) }
+        AudioPlayerScreen {
+            com.choidev.choifile.playback.AudioPlayback.stop()
+            onClose()
+        }
+        return
+    }
+
+    // Prose saved as text (a novel, a long .txt) reads as a book; smaller text files open in the text viewer, which
+    // offers the book view from its bar.
+    var asBook by remember(file) {
+        mutableStateOf(kind == FileKind.TEXT && file.extensionLower() in EBOOK_EXTENSIONS && file.length() >= EBOOK_DEFAULT_MIN_BYTES)
+    }
+    if (asBook) {
+        EbookScreen(file, onClose = ::close)
+        return
+    }
 
     // Video takes the whole screen and draws its own floating top bar.
     if (kind == FileKind.VIDEO) {
@@ -122,7 +147,10 @@ fun ViewerScreen(file: File, temporary: Boolean = false, onOpenWith: ((File) -> 
                             Icon(if (mdSource) Icons.Outlined.Visibility else Icons.Outlined.Code, stringResource(if (mdSource) R.string.md_show_rendered else R.string.md_show_source), Modifier.padding(0.dp))
                         }
                     }
-                    if ((kind == FileKind.TEXT || (kind == FileKind.MARKDOWN && mdSource)) && !temporary) {
+                    if (kind == FileKind.TEXT && file.extensionLower() in EBOOK_EXTENSIONS && !dirty) {
+                        IconButton({ asBook = true }) { Icon(Icons.AutoMirrored.Outlined.MenuBook, stringResource(R.string.ebook_read_as_book)) }
+                    }
+                    if ((kind == FileKind.TEXT || (kind == FileKind.MARKDOWN && mdSource)) && !temporary && file.length() <= MAX_TEXT_BYTES) {
                         IconButton({ saveRequest++ }, enabled = dirty) { Icon(Icons.Outlined.Save, stringResource(R.string.save)) }
                     }
                     if (!temporary) {
@@ -254,19 +282,27 @@ private fun TextViewer(file: File, saveRequest: Int, readOnly: Boolean, onDirty:
         if (file.extensionLower() in codeExt) HighlightTransformation(dark) else androidx.compose.ui.text.input.VisualTransformation.None
     }
 
+    // Too big to edit as one string: a read-only view that only reads what is on screen.
+    if (file.length() > MAX_TEXT_BYTES) {
+        LargeTextViewer(file, monospace = file.extensionLower() in codeExt || file.extensionLower() == "log")
+        return
+    }
+    // The file's own encoding (UTF-8, or CP949 for older Korean files), kept when saving.
+    var charset by remember(file) { mutableStateOf("UTF-8") }
     LaunchedEffect(file) {
-        if (file.length() > MAX_TEXT_BYTES) {
-            Toast.makeText(context, R.string.msg_too_large, Toast.LENGTH_LONG).show()
-            return@LaunchedEffect
+        val (cs, loaded) = withContext(Dispatchers.IO) {
+            val bytes = file.readBytes()
+            val cs = SubtitleText.detect(bytes)
+            cs to String(SubtitleText.toUtf8(bytes, cs), Charsets.UTF_8)
         }
-        val loaded = withContext(Dispatchers.IO) { file.readText() }
+        charset = cs
         saved = loaded
         text = loaded
     }
     LaunchedEffect(saveRequest) {
         val current = text
         if (saveRequest == 0 || current == null) return@LaunchedEffect
-        val ok = withContext(Dispatchers.IO) { runCatching { file.writeText(current) }.isSuccess }
+        val ok = withContext(Dispatchers.IO) { runCatching { file.writeText(current, charset(charset)) }.isSuccess }
         if (ok) { saved = current; onDirty(false) }
         Toast.makeText(context, if (ok) R.string.msg_saved else R.string.msg_save_failed, Toast.LENGTH_SHORT).show()
     }

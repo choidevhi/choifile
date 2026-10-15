@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fonts -->
+    <string name="eb_font_system_sans">標準ゴシック</string>
+    <string name="eb_font_system_serif">システム明朝</string>
+    <string name="eb_error_font_open">フォントファイルを開けません</string>
+    <string name="eb_error_not_font">フォントファイルではありません</string>
+    <string name="eb_error_font_add">フォントを追加できませんでした</string>
+
+    <!-- Library -->
+    <string name="eb_untitled">名称未設定</string>
+    <string name="eb_error_file_open">ファイルを開けません</string>
+
+    <!-- Page turn modes -->
+    <string name="eb_turn_curl">カール</string>
+    <string name="eb_turn_slide">スライド</string>
+    <string name="eb_turn_none">なし</string>
+
+    <!-- Themes -->
+    <string name="eb_theme_white">標準</string>
+    <string name="eb_theme_paper">紙</string>
+    <string name="eb_theme_calm">穏やか</string>
+    <string name="eb_theme_green">森</string>
+    <string name="eb_theme_gray">グレー</string>
+    <string name="eb_theme_night">夜</string>
+
+    <!-- Reader -->
+    <string name="eb_bookmark_added">ブックマークを追加しました</string>
+    <string name="eb_bookmark_removed">ブックマークを削除しました</string>
+    <string name="eb_bookmark_add">ブックマークを追加</string>
+    <string name="eb_bookmark_remove">ブックマークを削除</string>
+    <string name="eb_paginating">ページを計算中…</string>
+    <string name="eb_paginating_progress">ページを計算中 %1$d%%</string>
+    <string name="eb_paginating_notice">ページを計算しています</string>
+    <string name="eb_first_page">最初のページです</string>
+    <string name="eb_last_page">最後のページです</string>
+    <string name="eb_library">ライブラリ</string>
+    <string name="eb_search">検索</string>
+    <string name="eb_toc">目次</string>
+    <string name="eb_page_position">%1$d / %2$dページ · %3$d%%</string>
+    <string name="eb_page_label">%1$dページ</string>
+    <string name="eb_settings_button">あア</string>
+
+    <!-- Settings sheet -->
+    <string name="eb_close">閉じる</string>
+    <string name="eb_view_settings">表示設定</string>
+    <string name="eb_glyph_sample">あ</string>
+    <string name="eb_theme_sample">あア</string>
+    <string name="eb_use_system_brightness">システムの明るさを使用</string>
+    <string name="eb_theme">テーマ</string>
+    <string name="eb_font_and_layout">フォントとレイアウト</string>
+    <string name="eb_font">フォント</string>
+    <string name="eb_line_spacing">行間</string>
+    <string name="eb_line_spacing_tight">狭い</string>
+    <string name="eb_line_spacing_normal">標準</string>
+    <string name="eb_line_spacing_loose">広い</string>
+    <string name="eb_line_spacing_very_loose">とても広い</string>
+    <string name="eb_margins">余白</string>
+    <string name="eb_margin_narrow">狭い</string>
+    <string name="eb_margin_normal">標準</string>
+    <string name="eb_margin_wide">広い</string>
+    <string name="eb_page_turn">ページめくり</string>
+    <string name="eb_this_book">この本</string>
+    <string name="eb_reflow">改行を整理</string>
+    <string name="eb_reflow_footer">文の途中で途切れた行をつなげます。この本にだけ適用され、読んでいた位置はそのままです。</string>
+    <string name="eb_reading">読書</string>
+    <string name="eb_justify">両端揃え</string>
+    <string name="eb_volume_keys">音量ボタンでページをめくる</string>
+    <string name="eb_keep_screen_on">画面をオンのままにする</string>
+    <string name="eb_page_sound">ページめくりの音</string>
+    <string name="eb_tap_zones_footer">画面の左側をタップすると前のページ、右側は次のページ、中央はメニューです。</string>
+
+    <!-- Font sheet -->
+    <string name="eb_delete">削除</string>
+    <string name="eb_selected">選択済み</string>
+    <string name="eb_add_font_file">フォントファイルを追加…</string>
+    <string name="eb_add_font_footer">TTF・OTFフォントファイルを選ぶと、リストに追加されます。</string>
+
+    <!-- Contents and bookmarks sheet -->
+    <string name="eb_bookmarks_tab">ブックマーク %1$d</string>
+    <string name="eb_toc_empty_title">目次が見つかりません</string>
+    <string name="eb_toc_empty_body">「Chapter 1」「#12」「【12】」のような章タイトルらしい行を探して目次を作ります。</string>
+    <string name="eb_bookmarks_empty_title">ブックマークはありません</string>
+    <string name="eb_bookmarks_empty_body">読書中に画面の中央をタップし、右上のブックマークボタンをタップすると追加できます。</string>
+    <string name="eb_empty_page">(空白のページ)</string>
+    <string name="eb_bookmark_page_date">%1$sページ · %2$s</string>
+    <string name="eb_bookmark_date_format">M月d日</string>
+
+    <!-- Search sheet -->
+    <string name="eb_search_placeholder">本の中を検索</string>
+    <string name="eb_clear">消去</string>
+    <string name="eb_searching">検索中…</string>
+    <string name="eb_no_results">見つかりませんでした</string>
+    <string name="eb_results_capped">500件以上見つかりました(最初の500件)</string>
+    <string name="eb_results_count">%1$d件見つかりました</string>
+
+    <!-- Action sheet -->
+    <string name="eb_cancel">キャンセル</string>
+</resources>

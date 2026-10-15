@@ -66,6 +66,7 @@ import com.choidev.choifile.storage.NoMedia
 import com.choidev.choifile.storage.FileStore
 import com.choidev.choifile.storage.LocalFileStore
 import com.choidev.choifile.storage.SortKey
+import com.choidev.choifile.storage.SortSpec
 import com.choidev.choifile.storage.ScrollPos
 import com.choidev.choifile.storage.TrashEntry
 import com.choidev.choifile.storage.sortItems
@@ -106,7 +107,17 @@ sealed interface ConnectionTest {
     data class Failed(val message: String) : ConnectionTest
 }
 
-data class Tab(val id: Int, val path: String, val grid: Boolean = false)
+/**
+ * One tab: its folder, how that folder is shown (grid, a sort of its own when the user set one for it) and the
+ * filter on it.
+ */
+data class Tab(
+    val id: Int,
+    val path: String,
+    val grid: Boolean = false,
+    val sort: SortSpec? = null,
+    val filter: FileFilter = FileFilter(),
+)
 
 /** Items of one folder. [path] tells which folder, so a stale listing is never shown for another one. */
 data class Listing(
@@ -116,6 +127,8 @@ data class Listing(
     val locked: Boolean = false,
     /** Folders in [items] that contain a .nomedia file (local folders only). */
     val noMedia: Set<String> = emptySet(),
+    /** Items in the folder before the tab's filter, for "3 of 120". */
+    val unfiltered: Int = items.size,
 )
 
 /** Where an archive goes: next to it (merged), into a new folder named after it, or merged into a chosen folder. */
@@ -128,6 +141,7 @@ data class BrowserState(
     val current: Int = 0,
     val sort: SortKey = SortKey.NAME,
     val ascending: Boolean = true,
+    val foldersFirst: Boolean = true,
     val showHidden: Boolean = false,
     val selection: Set<String> = emptySet(),
     val clipboard: Clipboard? = null,
@@ -154,7 +168,7 @@ data class UiEvent(
 
 private const val MAX_VIEW_BYTES = 200L * 1024 * 1024
 
-private data class Persisted(val tabs: List<SavedTab>, val current: Int, val sort: SortKey, val ascending: Boolean, val showHidden: Boolean)
+private data class Persisted(val tabs: List<SavedTab>, val current: Int, val sort: SortKey, val ascending: Boolean, val foldersFirst: Boolean, val showHidden: Boolean)
 
 class BrowserViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -169,6 +183,7 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
     // ---- operation log, analysis, duplicates, automation ----
     private val opLog = AppStores.log(app)
     private val viewModes = AppStores.viewModes(app)
+    private val folderSorts = AppStores.folderSorts(app)
     private val ops = FileOps(store, opLog)
     private val ruleStore = AppStores.rules(app)
     private val _opRecords = MutableStateFlow(opLog.all())
@@ -238,21 +253,22 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
         protection.lockedRoot(physicalPath(path))
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, protection.lockedRoot(physicalPath(_state.value.tab.path)))
 
-    private data class Query(val path: String, val sort: SortKey, val ascending: Boolean, val hidden: Boolean)
+    private data class Query(val path: String, val sort: SortSpec, val hidden: Boolean, val filter: FileFilter)
 
     /** The open tab's listing, tagged with the folder it belongs to (null until the first listing arrives). */
     @OptIn(ExperimentalCoroutinesApi::class)
     val listing: StateFlow<Listing?> = combine(
-        _state.map { Query(it.tab.path, it.sort, it.ascending, it.showHidden) }.distinctUntilChanged(),
+        _state.map { Query(it.tab.path, effectiveSort(it), it.showHidden, it.tab.filter) }.distinctUntilChanged(),
         refresh,
         lockedRoot,
     ) { query, _, locked -> query to locked }
         .mapLatest { (q, locked) ->
             if (locked != null) return@mapLatest Listing(q.path, emptyList())
             try {
-                val items = listLocation(q.path).filter { q.hidden || !it.isHidden }
+                val all = listLocation(q.path).filter { q.hidden || !it.isHidden }
                 _listError.value = null
-                Listing(q.path, sortItems(items, q.sort, q.ascending), noMedia = noMediaIn(q.path, items))
+                val items = q.filter.apply(all, System.currentTimeMillis())
+                Listing(q.path, sortItems(items, q.sort), noMedia = noMediaIn(q.path, items), unfiltered = all.size)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -278,7 +294,8 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
         val s = _state.value
         try {
             val items = listLocation(path).filter { s.showHidden || !it.isHidden }
-            Listing(path, sortItems(items, s.sort, s.ascending), noMedia = noMediaIn(path, items))
+            val sort = folderSorts.get(path)?.let(SortSpec::unpack) ?: globalSort(s)
+            Listing(path, sortItems(items, sort), noMedia = noMediaIn(path, items))
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -354,13 +371,14 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
         opLog.addListener(opListener)
         // Persist tabs, view modes, sort and the hidden-files toggle whenever they change.
         viewModelScope.launch {
-            _state.map { Persisted(it.tabs.map { t -> SavedTab(t.path, t.grid) }, it.current, it.sort, it.ascending, it.showHidden) }
+            _state.map { Persisted(it.tabs.map { t -> SavedTab(t.path, t.grid) }, it.current, it.sort, it.ascending, it.foldersFirst, it.showHidden) }
                 .distinctUntilChanged()
                 .collect {
                     prefs.tabs = it.tabs
                     prefs.currentTab = it.current
                     prefs.sort = it.sort
                     prefs.ascending = it.ascending
+                    prefs.foldersFirst = it.foldersFirst
                     prefs.showHidden = it.showHidden
                 }
         }
@@ -382,12 +400,13 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun restoreState(): BrowserState {
         val saved = prefs.tabs.filter { File(it.path).isDirectory }
-        val tabs = if (saved.isEmpty()) listOf(Tab(0, rootPath)) else saved.mapIndexed { i, t -> Tab(i, t.path, viewModes.isGrid(t.path)) }
+        val tabs = if (saved.isEmpty()) listOf(Tab(0, rootPath)) else saved.mapIndexed { i, t -> Tab(i, t.path, viewModes.isGrid(t.path), folderSorts.get(t.path)?.let(SortSpec::unpack)) }
         return BrowserState(
             tabs = tabs,
             current = prefs.currentTab.coerceIn(0, tabs.size - 1),
             sort = prefs.sort,
             ascending = prefs.ascending,
+            foldersFirst = prefs.foldersFirst,
             showHidden = prefs.showHidden,
         )
     }
@@ -395,7 +414,10 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
     // ---- navigation / tabs ----
 
     /** [this] tab moved to [path], showing it the way the user last chose for that folder. */
-    private fun Tab.at(path: String) = copy(path = path, grid = viewModes.isGrid(path))
+    // The name query belongs to the folder it was typed in; kind, date and size filters follow the tab.
+    private fun Tab.at(path: String) = copy(
+        path = path, grid = viewModes.isGrid(path), sort = folderSorts.get(path)?.let(SortSpec::unpack), filter = filter.copy(text = ""),
+    )
 
     fun openDir(path: String) = _state.update { s ->
         s.copy(tabs = s.tabs.mapAt(s.current) { it.at(path) }, selection = emptySet())
@@ -441,8 +463,43 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
         // Other tabs showing the same folder follow, so one folder never looks two ways at once.
         _state.update { s -> s.copy(tabs = s.tabs.map { if (it.path == tab.path) it.copy(grid = grid) else it }) }
     }
-    fun setSort(key: SortKey) = _state.update { it.copy(sort = key) }
-    fun toggleAscending() = _state.update { it.copy(ascending = !it.ascending) }
+    // ---- sorting: one order for every folder, or one of its own for a folder ----
+
+    private fun globalSort(s: BrowserState) = SortSpec(s.sort, s.ascending, s.foldersFirst)
+
+    fun effectiveSort(s: BrowserState = _state.value): SortSpec = s.tab.sort ?: globalSort(s)
+
+    /** Picking the current key again flips the direction, as in iOS Files; dates and sizes start newest/largest first. */
+    fun pickSort(key: SortKey) {
+        val cur = effectiveSort()
+        applySort(if (cur.key == key) cur.copy(ascending = !cur.ascending) else cur.copy(key = key, ascending = key == SortKey.NAME || key == SortKey.TYPE))
+    }
+
+    fun toggleFoldersFirst() = applySort(effectiveSort().let { it.copy(foldersFirst = !it.foldersFirst) })
+
+    private fun applySort(spec: SortSpec) {
+        val tab = _state.value.tab
+        if (tab.sort != null) {
+            folderSorts.put(tab.path, spec.pack())
+            _state.update { s -> s.copy(tabs = s.tabs.map { if (it.path == tab.path) it.copy(sort = spec) else it }) }
+        } else {
+            _state.update { it.copy(sort = spec.key, ascending = spec.ascending, foldersFirst = spec.foldersFirst) }
+        }
+    }
+
+    /** Gives the open folder an order of its own (starting from the current one), or back to the common one. */
+    fun setFolderSort(own: Boolean) {
+        val tab = _state.value.tab
+        val spec = if (own) effectiveSort() else null
+        if (spec != null) folderSorts.put(tab.path, spec.pack()) else folderSorts.remove(tab.path)
+        _state.update { s -> s.copy(tabs = s.tabs.map { if (it.path == tab.path) it.copy(sort = spec) else it }) }
+    }
+
+    // ---- filtering the open folder ----
+
+    fun setFilter(filter: FileFilter) = _state.update { s -> s.copy(tabs = s.tabs.mapAt(s.current) { it.copy(filter = filter) }, selection = emptySet()) }
+
+    fun clearFilter() = setFilter(FileFilter())
     fun toggleHidden() = _state.update { it.copy(showHidden = !it.showHidden) }
 
     // ---- selection / clipboard ----

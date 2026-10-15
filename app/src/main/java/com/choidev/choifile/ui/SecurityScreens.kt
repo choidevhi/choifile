@@ -1,5 +1,8 @@
 package com.choidev.choifile.ui
 
+import android.os.LocaleList
+import android.os.Build
+import android.app.LocaleManager
 import android.text.format.Formatter
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -222,6 +225,21 @@ fun SettingsScreen(
                     MutedText(stringResource(R.string.setting_associations_desc), Modifier.padding(Space.sm))
                     if (associations.isNotEmpty()) {
                         OutlineButton(onClearAllAssociations, Modifier.padding(start = Space.sm, bottom = Space.sm)) { Text(stringResource(R.string.assoc_clear_all)) }
+                    }
+                }
+            }
+            if (Build.VERSION.SDK_INT >= 33) item {
+                SectionLabel(stringResource(R.string.settings_section_language))
+                ChoiCard(cardModifier, padding = 0.dp) {
+                    val manager = remember { context.getSystemService(LocaleManager::class.java) }
+                    var current by remember { mutableStateOf(manager.applicationLocales.toLanguageTags().substringBefore(',').substringBefore('-')) }
+                    // Each language is named in itself, as iOS does; picking one restarts the screen in it.
+                    listOf("" to stringResource(R.string.settings_language_system), "ko" to "한국어", "en" to "English", "ja" to "日本語").forEachIndexed { i, (tag, label) ->
+                        if (i > 0) HorizontalDivider(Modifier.padding(start = Space.lg), thickness = Hairline, color = c.border)
+                        ChoiMenuItem(label, {
+                            current = tag
+                            manager.applicationLocales = if (tag.isEmpty()) LocaleList.getEmptyLocaleList() else LocaleList.forLanguageTags(tag)
+                        }, checked = current == tag)
                     }
                 }
             }

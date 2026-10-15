@@ -4,6 +4,7 @@ import android.content.Context
 import com.choidev.choifile.storage.SortKey
 import com.choidev.choifile.util.VideoEnd
 import com.choidev.choifile.util.VideoFit
+import com.choidev.choifile.util.VideoLeave
 
 /** Small SharedPreferences wrapper for everything that must survive a restart. */
 class AppPrefs(context: Context) {
@@ -21,6 +22,9 @@ class AppPrefs(context: Context) {
     var ascending: Boolean
         get() = sp.getBoolean("ascending", true)
         set(v) = sp.edit().putBoolean("ascending", v).apply()
+    var foldersFirst: Boolean
+        get() = sp.getBoolean("folders_first", true)
+        set(v) = sp.edit().putBoolean("folders_first", v).apply()
     var showHidden: Boolean
         get() = sp.getBoolean("show_hidden", false)
         set(v) = sp.edit().putBoolean("show_hidden", v).apply()
@@ -47,6 +51,10 @@ class AppPrefs(context: Context) {
     var subtitleBox: Boolean
         get() = sp.getBoolean("subtitle_box", false)
         set(v) = sp.edit().putBoolean("subtitle_box", v).apply()
+    /** What a video does when the app is left; null until the user answered the question on first playback. */
+    var videoLeave: VideoLeave?
+        get() = sp.getString("video_leave", null)?.let { v -> VideoLeave.entries.firstOrNull { it.name == v } }
+        set(v) = sp.edit().putString("video_leave", v?.name).apply()
     /** Decode video with FFmpeg first instead of the device's hardware decoders. */
     var preferSoftware: Boolean
         get() = sp.getBoolean("video_prefer_software", false)

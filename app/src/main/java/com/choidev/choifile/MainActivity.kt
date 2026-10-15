@@ -38,6 +38,8 @@ import com.choidev.choifile.ui.ComicScreen
 import com.choidev.choifile.ui.ConnectionsScreen
 import com.choidev.choifile.ui.HostKeyDialog
 import com.choidev.choifile.ui.AnalysisScreen
+import com.choidev.choifile.ui.AudioPlayerScreen
+import com.choidev.choifile.playback.AudioPlayback
 import com.choidev.choifile.ui.DuplicatesScreen
 import com.choidev.choifile.ui.OpenWithSheet
 import com.choidev.choifile.ui.OperationsScreen
@@ -69,6 +71,22 @@ private enum class Screen { BROWSER, SETTINGS, VAULT, SEARCH, CONNECTIONS, OPERA
 
 /** Biometric prompts need a FragmentActivity (ComponentActivity is not enough). */
 class MainActivity : FragmentActivity() {
+    /** Set by the e-reader while a book is open: volume keys turn pages (true = volume down = next page). */
+    var volumeKeyHandler: ((Boolean) -> Boolean)? = null
+
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean {
+        val handler = volumeKeyHandler
+        if (handler != null && (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP)) {
+            if (handler(keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN)) return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: android.view.KeyEvent): Boolean {
+        if (volumeKeyHandler != null && (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP)) return true
+        return super.onKeyUp(keyCode, event)
+    }
+
     // Below Android 12 the system cannot enter picture-in-picture on its own; a playing video asks for it here.
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
@@ -124,6 +142,8 @@ class MainActivity : FragmentActivity() {
 
         fun isComicArchive(name: String) = extensionKey(name) == "cbz"
         fun hasBuiltIn(name: String) = kindOf(File(name)) != FileKind.OTHER || ArchiveFormat.detect(name) != null
+        // Music plays in the app-wide player, so it keeps going while the user browses; this shows its screen.
+        var nowPlaying by rememberSaveable { mutableStateOf(false) }
 
         // choifile's own way of opening a local file: viewer, comic reader for .cbz, folder view for archives.
         fun openBuiltIn(path: String) {
@@ -131,6 +151,10 @@ class MainActivity : FragmentActivity() {
             when {
                 isComicArchive(name) -> comic = path
                 ArchiveFormat.detect(name) != null -> viewModel.openDir(ArchiveLocation.make(path))
+                kindOf(File(name)) == FileKind.AUDIO -> {
+                    AudioPlayback.play(context, File(path))
+                    nowPlaying = true
+                }
                 else -> viewing = path
             }
         }
@@ -184,6 +208,7 @@ class MainActivity : FragmentActivity() {
             temp != null -> ViewerScreen(File(temp), temporary = true) { closeTemp() }
             view != null && !viewModel.isLocked(view) -> ViewerScreen(File(view), onOpenWith = { openWith = it.path }) { viewing = null }
             comicPath != null && !viewModel.isLocked(comicPath) -> ComicScreen(comicPath) { comic = null }
+            nowPlaying -> AudioPlayerScreen { nowPlaying = false }
             screen == Screen.SETTINGS -> SettingsScreen(
                 appLock = appLockOn,
                 onAppLock = { on ->
@@ -233,6 +258,7 @@ class MainActivity : FragmentActivity() {
                 onOpenConnections = { screen = Screen.CONNECTIONS },
                 onOpenComic = { comic = it },
                 onOpenWith = { openWith = it },
+                onOpenNowPlaying = { nowPlaying = true },
                 onOpenTool = { screen = when (it) {
                     ToolScreen.OPERATIONS -> Screen.OPERATIONS
                     ToolScreen.ANALYSIS -> Screen.ANALYSIS

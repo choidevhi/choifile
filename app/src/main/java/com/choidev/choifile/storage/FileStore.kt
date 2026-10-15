@@ -11,18 +11,41 @@ data class FileItem(
     val isHidden: Boolean,
 )
 
-enum class SortKey { NAME, SIZE, DATE }
+enum class SortKey { NAME, DATE, SIZE, TYPE }
 
-/** Folders always come first; [ascending] applies within each group. */
-fun sortItems(items: List<FileItem>, key: SortKey, ascending: Boolean): List<FileItem> {
-    val base: Comparator<FileItem> = when (key) {
-        SortKey.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
-        SortKey.SIZE -> compareBy<FileItem> { it.size }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
-        SortKey.DATE -> compareBy<FileItem> { it.modified }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+/**
+ * How a folder is ordered. Names compare naturally ("file2" before "file10", case ignored); [foldersFirst] keeps
+ * folders above files whatever the direction, the way Finder and iOS Files do by default.
+ */
+data class SortSpec(val key: SortKey = SortKey.NAME, val ascending: Boolean = true, val foldersFirst: Boolean = true) {
+    /** Packed into one number for [KeyedLongStore]: key, direction and the folders-first switch. */
+    fun pack(): Long = key.ordinal * 4L + (if (ascending) 2 else 0) + (if (foldersFirst) 1 else 0)
+
+    companion object {
+        fun unpack(v: Long): SortSpec? {
+            val key = SortKey.entries.getOrNull((v / 4).toInt()) ?: return null
+            return SortSpec(key, ascending = (v and 2L) != 0L, foldersFirst = (v and 1L) != 0L)
+        }
     }
-    val directed = if (ascending) base else base.reversed()
-    return items.sortedWith(compareByDescending<FileItem> { it.isDirectory }.then(directed))
 }
+
+private val byName = Comparator<FileItem> { a, b -> com.choidev.choifile.util.NaturalOrder.compare(a.name, b.name) }
+
+private fun extensionOf(item: FileItem): String = if (item.isDirectory) "" else item.name.substringAfterLast('.', "").lowercase()
+
+fun sortItems(items: List<FileItem>, spec: SortSpec): List<FileItem> {
+    val base: Comparator<FileItem> = when (spec.key) {
+        SortKey.NAME -> byName
+        SortKey.DATE -> compareBy<FileItem> { it.modified }.then(byName)
+        SortKey.SIZE -> compareBy<FileItem> { it.size }.then(byName)
+        SortKey.TYPE -> compareBy<FileItem> { extensionOf(it) }.then(byName)
+    }
+    val directed = if (spec.ascending) base else base.reversed()
+    return items.sortedWith(if (spec.foldersFirst) compareByDescending<FileItem> { it.isDirectory }.then(directed) else directed)
+}
+
+/** Folders first; [ascending] applies within each group. */
+fun sortItems(items: List<FileItem>, key: SortKey, ascending: Boolean): List<FileItem> = sortItems(items, SortSpec(key, ascending))
 
 data class TrashEntry(val id: String, val name: String, val origin: String)
 

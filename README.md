@@ -1,28 +1,94 @@
 # choifile
 
-Android 파일 관리자. 탭·그리드·드래그 선택 같은 기본 탐색 위에 지문 잠금, 폴더 보호, 숨긴 항목, 파일 암호화, 네트워크 저장소, 내장 뷰어를 한 앱에 담았습니다.
+**An Android file manager with an iOS look, and the viewers built in.** Tabs, grid and list views, drag-to-select and
+sorting and filtering per folder come with a fingerprint lock, protected folders, a hidden vault, file encryption,
+network drives, and players for video, music and books, so most files open without leaving the app.
 
-## 기능
+English · [한국어](README.ko.md) · Languages in the app: English, 한국어, 日本語
 
-- **탐색**: 여러 탭(좌우 스와이프 전환), 그리드·목록, 폴더별 정렬과 스크롤 위치 기억, 드래그 범위 선택, 즐겨찾기 드로어
-- **파일 작업**: 복사·이동·이름 변경·공유, 휴지통과 작업 기록 되돌리기, 파일 생성기, `.nomedia` 토글, APK 설치
-- **보안**: 지문·기기 잠금, 폴더 보호와 유예 시간, 숨긴 항목 보관함, AES-256-GCM 파일 암호화(.cfenc), 덮어쓰기 삭제
-- **압축**: zip·7z·tar 계열 만들기와 풀기, rar 읽기, 압축 파일을 폴더처럼 탐색
-- **네트워크**: SFTP·SMB·FTP·WebDAV, Tailscale 기기 연결, PC에서 접속하는 내장 HTTP·FTP 서버(토큰 인증)
-- **뷰어**: 이미지(좌우 넘김), 동영상(실시간 탐색, 슬로 재생, FFmpeg 코덱, 자막), 텍스트·코드, PDF, Markdown, 만화(세로 스크롤, 읽던 위치 기억)
-- **도구**: 검색 인덱스, 저장 공간 분석, 중복 파일 찾기, 해시 검사, 자동화 규칙
+<p>
+  <img src="docs/screenshots/browser.png" width="24%" alt="File list with large title" />
+  <img src="docs/screenshots/grid.png" width="24%" alt="Grid view with filters" />
+  <img src="docs/screenshots/menu.png" width="24%" alt="Context menu" />
+  <img src="docs/screenshots/dark.png" width="24%" alt="Dark mode" />
+</p>
+<p>
+  <img src="docs/screenshots/video.png" width="49%" alt="Video player with subtitles" />
+  <img src="docs/screenshots/music.png" width="24%" alt="Music player" />
+  <img src="docs/screenshots/ebook.png" width="24%" alt="E-reader" />
+</p>
 
-요구 사항: Android 8.0(API 26) 이상. 전체 파일 접근 권한을 사용합니다.
+## Download
 
-## 빌드
+Get the APK from [Releases](https://github.com/choidevhi/choifile/releases/latest):
+
+- `choifile-x.y.z-arm64.apk` for almost every phone from the last few years (smaller download)
+- `choifile-x.y.z.apk` for every device (arm64, armv7, x86, x86_64)
+
+Requires Android 8.0 (API 26) or later. choifile asks for "All files access" to manage your storage.
+
+## Features
+
+**Browsing**
+- iOS-style navigation: a large title that folds into the bar, a back button named after the parent folder,
+  slide-in folder transitions, a swipe from the left edge to go back
+- Several tabs (swipe sideways to switch), grid or list remembered per folder, scroll position remembered per folder
+- Sort by name (natural order: file2 before file10), date, size or kind; folders first or mixed; one order for all
+  folders or one of its own for a folder
+- Filter the open folder by name (with `*` and `?` wildcards, and Korean initial consonants such as ㅎㄱ), by kind
+  (folders, photos, videos, music, documents, archives, APKs), by last-modified date and by size
+- Long-press and drag to select a range, favorites in the sidebar
+
+**Files**
+- Copy, move, rename, share, compress; a trash with restore, and an undoable operation log
+- zip, 7z and tar family archives: create, extract, and browse an archive like a folder; rar read-only
+- `.nomedia` toggle, APK install, a dummy-file generator, duplicate finder, storage analysis, search index,
+  automation rules
+
+**Security**
+- App lock with fingerprint or the device screen lock, protected folders with a grace period
+- A hidden vault, AES-256-GCM file encryption (`.cfenc`), overwrite-before-delete
+
+**Network**
+- SFTP, SMB, FTP and WebDAV drives, Tailscale device discovery
+- A built-in HTTP and FTP server with token sign-in, for reaching the phone from a PC
+
+**Video**
+- Gestures: swipe to seek, brightness on the left, volume on the right (boost to 200%), hold for 2x, pinch to zoom,
+  double-tap to skip
+- Picture modes (fit, crop, stretch, 16:9, 4:3, original), lock, auto rotation, resume where each video was left
+- The folder as a playlist with an end action, A-B loop, frame stepping, 0.25x to 3x
+- Subtitles from any file in the folder (SRT, ASS, VTT and SAMI), any encoding (UTF-8, CP949 and more), sync in
+  0.1 s steps saved per video, size, color and background
+- Picture-in-picture, sound only, or stop when you leave the app (asked on first playback)
+- Hardware or FFmpeg decoding (H.264, HEVC, VP8/9, MPEG-2, AC3, DTS, FLAC, Opus and more), sleep timer, screenshots
+
+**Music**
+- A player that keeps going while you browse or leave the app, with notification and lock screen controls
+- Cover art and tags, the folder as the queue, shuffle, repeat, speed, sleep timer, and a mini player above the
+  file list
+
+**Books and text**
+- An e-reader for `.txt` novels: page turns with a curl, fonts, themes, table of contents, search, bookmarks,
+  volume keys to turn pages, reading position kept per book
+- Text files of any size open read-only and instantly (only the visible part is read); smaller ones can be edited
+  in their own encoding
+
+**Other viewers**
+- Photos (swipe between them, pinch zoom), PDF, Markdown, code with syntax highlighting, comics (vertical scroll,
+  reading position kept)
+
+## Build
 
 ```
 $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'
 .\gradlew.bat assembleDebug testDebugUnitTest
 ```
 
-릴리스 서명 정보는 `~/.gradle/gradle.properties`의 `CHOIDEV_RELEASE_*` 값에서 읽습니다. 값이 없으면 서명하지 않은 릴리스가 만들어집니다. `-Pchoifile.abi=arm64-v8a`로 한 가지 ABI만 담은 APK를 만들 수 있습니다.
+Release signing reads `CHOIDEV_RELEASE_*` from `~/.gradle/gradle.properties`; without them the release build is
+unsigned. `-Pchoifile.abi=arm64-v8a` builds an APK with a single ABI.
 
-## 라이선스
+## License
 
-GPL-3.0. 동영상 코덱용 FFmpeg 확장(NextLib)이 GPL-3.0이라 앱 전체를 같은 라이선스로 공개합니다. 사용한 라이브러리는 [THIRD_PARTY.md](THIRD_PARTY.md)에 있습니다.
+GPL-3.0. The FFmpeg extension for video codecs (NextLib) is GPL-3.0, so the whole app is published under the same
+license. The libraries used are listed in [THIRD_PARTY.md](THIRD_PARTY.md).
