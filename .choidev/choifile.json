@@ -1,0 +1,85 @@
+{
+  "name": "choifile",
+  "summary": "뷰어와 플레이어를 앱 안에 다 담은 iOS 스타일 Android 파일 관리자",
+  "description": "choifile은 Android용 파일 관리자입니다. 탭, 그리드·목록 보기, 드래그 범위 선택, 폴더마다 기억하는 정렬과 필터를 갖췄고, 사진·PDF·Markdown·코드·만화 뷰어와 동영상·음악 플레이어, 전자책 리더가 앱 안에 들어 있어서 대부분의 파일을 다른 앱 없이 엽니다.\n\n파일 작업은 복사·이동·이름 변경·공유와 휴지통, 되돌릴 수 있는 작업 기록, zip·7z·tar 압축 만들기와 풀기, 압축 파일을 폴더처럼 둘러보기까지 지원합니다. SFTP·SMB·FTP·WebDAV 네트워크 저장소와 Tailscale 기기 연결, PC에서 접속하는 내장 파일 서버도 있습니다. 앱 잠금, 폴더 보호, 숨긴 항목 보관함, 파일 암호화로 개인 파일을 지킵니다.\n\nv0.5부터 iOS 파일 앱의 디자인을 따릅니다. 큰 제목이 막대로 접히는 탐색, 상위 폴더 이름이 붙은 뒤로 버튼, 알림창 스타일 대화상자, 컨텍스트 메뉴를 씁니다. 동영상 플레이어는 제스처, 작은 창(PiP), 자체 자막 엔진(SRT·ASS·VTT·SMI, 인코딩 자동 감지, 0.1초 싱크), 하드웨어·FFmpeg 디코더 선택을 갖췄습니다. 음악은 앱을 나가도 계속 재생됩니다.\n\n앱 언어는 한국어, English, 日本語를 지원하며 Android 8.0 이상에서 동작합니다. 동영상 코덱용 FFmpeg 확장이 GPL-3.0이라 앱 전체를 GPL-3.0으로 공개합니다.",
+  "status": "active",
+  "startedAt": "2026-10-04",
+  "version": "0.6.1",
+  "stack": [
+    { "name": "Kotlin", "group": "Mobile" },
+    { "name": "Jetpack Compose", "group": "Mobile" },
+    { "name": "Material 3", "group": "Mobile" },
+    { "name": "Media3 ExoPlayer", "group": "Mobile" },
+    { "name": "FFmpeg (NextLib)", "group": "Mobile" },
+    { "name": "Coil", "group": "Mobile" },
+    { "name": "WorkManager", "group": "Mobile" },
+    { "name": "Apache Commons Compress", "group": "Tools" },
+    { "name": "sshj · smbj · Commons Net", "group": "Tools" },
+    { "name": "Gradle", "group": "Tools" }
+  ],
+  "links": [
+    { "label": "GitHub", "href": "https://github.com/choidevhi/choifile", "kind": "github" },
+    { "label": "APK 내려받기", "href": "https://github.com/choidevhi/choifile/releases/latest", "kind": "download" }
+  ],
+  "devlog": [
+    {
+      "date": "2026-10-04",
+      "title": "v0.3.0 첫 공개",
+      "body": "파일 탐색과 기본 파일 작업, 휴지통과 작업 기록, 압축 파일, 네트워크 저장소, 내장 파일 서버, 앱 잠금과 파일 암호화, 검색 인덱스와 자동화 규칙을 담은 첫 버전입니다.",
+      "href": "https://github.com/choidevhi/choifile/releases/tag/v0.3.0"
+    },
+    {
+      "date": "2026-10-04",
+      "title": "v0.4.0 뷰어와 만화 모드",
+      "body": "확장자별 열기 방식, 사진 넘기기와 확대, 동영상 플레이어 기본 컨트롤, 웹툰 뷰어를 추가했습니다.",
+      "href": "https://github.com/choidevhi/choifile/releases/tag/v0.4.0"
+    },
+    {
+      "date": "2026-10-04",
+      "title": "v0.4.1 사이드바와 즐겨찾기",
+      "body": "사이드바, 즐겨찾기 폴더, 길게 누른 채 끌어서 고르는 범위 선택, 동영상 썸네일을 추가했습니다.",
+      "href": "https://github.com/choidevhi/choifile/releases/tag/v0.4.1"
+    },
+    {
+      "date": "2026-10-05",
+      "title": "v0.4.2 APK 설치",
+      "href": "https://github.com/choidevhi/choifile/releases/tag/v0.4.2"
+    },
+    {
+      "date": "2026-10-05",
+      "title": "v0.4.3 FFmpeg 코덱",
+      "body": "그리드에서 한 번 눌러 열기, 동영상 실시간 탐색, FFmpeg 코덱을 추가했습니다.",
+      "href": "https://github.com/choidevhi/choifile/releases/tag/v0.4.3"
+    },
+    {
+      "date": "2026-10-15",
+      "title": "v0.4.4 폴더별 보기와 전체 화면 동영상",
+      "body": "폴더마다 그리드·목록을 기억하고, 사진을 확대한 뒤 화면이 검게 변하던 문제를 고쳤습니다. 동영상 플레이어에 제스처와 이어보기를 넣었습니다.",
+      "href": "https://github.com/choidevhi/choifile/releases/tag/v0.4.4"
+    },
+    {
+      "date": "2026-10-15",
+      "title": "v0.5.0 iOS 스타일 개편",
+      "body": "iOS 색과 글자 체계, 큰 제목 탐색, 알림창 대화상자, 컨텍스트 메뉴로 앱 전체를 다시 디자인했습니다.",
+      "href": "https://github.com/choidevhi/choifile/releases/tag/v0.5.0"
+    },
+    {
+      "date": "2026-10-15",
+      "title": "v0.5.1 동영상 플레이어 2단계",
+      "body": "PiP, 자체 자막 엔진, 디코더 선택, 슬립 타이머, 스크린샷을 추가했습니다.",
+      "href": "https://github.com/choidevhi/choifile/releases/tag/v0.5.1"
+    },
+    {
+      "date": "2026-10-15",
+      "title": "v0.6.0 음악 플레이어와 전자뷰어",
+      "body": "음악 플레이어와 백그라운드 재생, 정렬·필터 고도화, 전자뷰어 내장, 큰 텍스트 파일, 영어·일본어를 추가했습니다.",
+      "href": "https://github.com/choidevhi/choifile/releases/tag/v0.6.0"
+    },
+    {
+      "date": "2026-10-15",
+      "title": "v0.6.1 텍스트 뷰어·전자뷰어 선택",
+      "body": ".txt를 열 때 텍스트 뷰어와 전자뷰어 중 고르고, 고른 방식을 고정할 수 있게 했습니다.",
+      "href": "https://github.com/choidevhi/choifile/releases/tag/v0.6.1"
+    }
+  ]
+}
