@@ -281,6 +281,12 @@ fun BrowserScreen(
     // iOS large title: shown at the top of a folder, folded into the bar once the list scrolls.
     var collapsed by remember { mutableStateOf(false) }
     LaunchedEffect(state.tab.path, state.current) { collapsed = false }
+    // Full height of the large title and how much of it is on screen right now (0 when folded, in between while
+    // it animates). The list's top padding always leaves room for the whole title, so folding it never moves the
+    // list: otherwise a list just taller than the screen stops being scrollable once the title folds, jumps back
+    // to the top, the title unfolds again, and the two keep flipping.
+    var titlePx by remember { mutableIntStateOf(0) }
+    var titleShownPx by remember { mutableIntStateOf(0) }
     var bottomPx by remember { mutableIntStateOf(0) }
     var miniPx by remember { mutableIntStateOf(0) }
     val music by AudioPlayback.state.collectAsStateWithLifecycle()
@@ -329,7 +335,7 @@ fun BrowserScreen(
         else -> navInset
     }
     val padding = PaddingValues(
-        top = with(density) { topPx.toDp() } + Space.xs,
+        top = with(density) { (topPx - titleShownPx + titlePx).toDp() } + Space.xs,
         bottom = bottomCover + Space.sm,
     )
 
@@ -409,6 +415,7 @@ fun BrowserScreen(
                     onOpenFile = onOpenFile,
                     onUnlock = { root -> requestAuth(R.string.auth_subtitle_folder, false) { vm.unlock(root) } },
                     onDragSelecting = { dragSelecting = it },
+                    foldAtPx = titlePx,
                     onScrolled = { if (isCurrent) collapsed = it },
                 )
             }
@@ -426,8 +433,11 @@ fun BrowserScreen(
                 } else {
                     SelectionRow(state, entries.size, vm)
                 }
-                AnimatedVisibility(state.selection.isEmpty() && !collapsed, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                    LargeTitle(vm.tabLabel(state.tab.path), vm.displayPath(state.tab.path))
+                // The wrapper stays when the title is gone, so it reports 0 then. As in iOS Files, selecting keeps the title.
+                Column(Modifier.onSizeChanged { titleShownPx = it.height }) {
+                    AnimatedVisibility(!collapsed, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                        LargeTitle(vm.tabLabel(state.tab.path), vm.displayPath(state.tab.path), Modifier.onSizeChanged { titlePx = it.height })
+                    }
                 }
                 AnimatedVisibility(state.selection.isEmpty() && (filterOpen || state.tab.filter.active), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                     val here = listing?.takeIf { it.path == state.tab.path }
@@ -582,6 +592,7 @@ private fun TabPage(
     onOpenFile: (FileItem) -> Unit,
     onUnlock: (String) -> Unit,
     onDragSelecting: (Boolean) -> Unit,
+    foldAtPx: Int,
     onScrolled: (Boolean) -> Unit,
 ) {
     var peeked by remember(tab.path) { mutableStateOf<Listing?>(null) }
@@ -629,7 +640,7 @@ private fun TabPage(
             else -> key(path, shown.second) {
                 FileList(
                     data.items, data.noMedia, tab.copy(path = path, grid = shown.second), state, padding, protectedPaths, vm, onOpenFile,
-                    interactive = isCurrent && here, onDragSelecting, onScrolled = { if (here) onScrolled(it) },
+                    interactive = isCurrent && here, onDragSelecting, foldAtPx, onScrolled = { if (here) onScrolled(it) },
                 )
             }
         }
@@ -649,6 +660,7 @@ private fun FileList(
     onOpenFile: (FileItem) -> Unit,
     interactive: Boolean,
     onDragSelecting: (Boolean) -> Unit,
+    foldAtPx: Int,
     onScrolled: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
@@ -683,10 +695,20 @@ private fun FileList(
         snapshotFlow { position() }.debounce(400).collect { vm.saveScrollPosition(tab.path, it) }
     }
     DisposableEffect(tab.path, tab.grid) { onDispose { vm.saveScrollPosition(tab.path, position()) } }
-    // Fold the large title away as soon as the list leaves its top.
+    // Fold the large title once the list has scrolled by the title's height, as iOS does: the first row then sits
+    // right under the folded bar.
+    val foldAt by rememberUpdatedState(foldAtPx)
+    fun scrolledPx(): Int {
+        val p = position()
+        if (p.index == 0) return p.offset
+        // A grid's first visible item is at least one full row down, taller than the title.
+        if (tab.grid) return Int.MAX_VALUE
+        val row = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: return Int.MAX_VALUE
+        return p.index * row + p.offset
+    }
     LaunchedEffect(tab.path, tab.grid, interactive) {
         if (!interactive) return@LaunchedEffect
-        snapshotFlow { position().let { it.index > 0 || it.offset > 4 } }.collect(onScrolled)
+        snapshotFlow { scrolledPx() >= foldAt.coerceAtLeast(1) }.collect(onScrolled)
     }
 
     // List: the icon starts (or extends) multi-select, the row opens. Grid: the cell opens, the corner check selects.
@@ -1114,8 +1136,8 @@ private fun sortDirectionLabel(key: SortKey, ascending: Boolean) = when (key) {
 
 /** The folder's name in Large Title size with its path under it; scrolls away into [NavRow]. */
 @Composable
-private fun LargeTitle(title: String, subtitle: String) {
-    Column(Modifier.fillMaxWidth().padding(start = Space.lg, end = Space.lg, bottom = Space.sm)) {
+private fun LargeTitle(title: String, subtitle: String, modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxWidth().padding(start = Space.lg, end = Space.lg, bottom = Space.sm)) {
         Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.displaySmall)
         Text(subtitle, maxLines = 1, overflow = TextOverflow.StartEllipsis, style = MaterialTheme.typography.bodySmall, color = ChoiTheme.colors.mutedForeground)
     }
